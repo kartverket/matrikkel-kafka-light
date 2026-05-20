@@ -3,7 +3,7 @@ plugins {
     alias(ktorLibs.plugins.ktor)
 }
 
-group = "no.statkart"
+group = "no.kartverket"
 version = "1.0.0-SNAPSHOT"
 
 application {

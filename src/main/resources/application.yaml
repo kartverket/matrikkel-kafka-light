@@ -3,4 +3,4 @@ ktor:
     port: 8080
   application:
     modules:
-      - no.statkart.RoutingKt.configureRouting
+      - no.kartverket.RoutingKt.configureRouting

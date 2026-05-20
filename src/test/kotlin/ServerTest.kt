@@ -1,4 +1,4 @@
-package no.statkart
+package no.kartverket
 
 import io.ktor.client.request.get
 import io.ktor.http.HttpStatusCode

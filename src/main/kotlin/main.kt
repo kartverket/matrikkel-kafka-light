@@ -1,4 +1,4 @@
-package no.statkart
+package no.kartverket
 
 import io.ktor.server.engine.*
 import io.ktor.server.application.*
