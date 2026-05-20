@@ -1,0 +1,12 @@
+# nonk8s
+apiVersion: "backstage.io/v1alpha1"
+kind: "Component"
+metadata:
+  name: "matrikkel-kafka-light"
+  tags:
+    - "public"
+spec:
+  type: "service"
+  lifecycle: "production"
+  owner: "heimdall"
+  system: "m22"
