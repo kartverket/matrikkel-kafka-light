@@ -7,11 +7,10 @@ COPY gradle ./gradle
 RUN ./gradlew --version
 
 COPY . .
-RUN ./gradlew :installDist --no-daemon
+RUN ./gradlew :apps:broker:installDist --no-daemon
 
 FROM eclipse-temurin:23-jre
-USER app
 WORKDIR /app
-COPY --from=build /workspace/apps/broker/build/install/matrikkel-kafka-light /app
-EXPOSE 8080
-ENTRYPOINT ["bin/matrikkel-kafka-light"]
+COPY --from=build /workspace/apps/broker/build/install/broker /app
+EXPOSE 8081
+ENTRYPOINT ["/app/bin/broker"]

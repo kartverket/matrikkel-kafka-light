@@ -1,4 +1,4 @@
-package no.kartverket.no.kartverket.matrikkel.broker
+package no.kartverket.matrikkel.broker
 
 import io.ktor.server.application.*
 import io.ktor.server.response.*
