@@ -1,5 +1,5 @@
 services:
-  serg-sync:
+  broker:
     build:
       context: .
       dockerfile: apps/broker/Dockerfile
