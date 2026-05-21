@@ -1,0 +1,188 @@
+name: "[matrikkel-kafka-light] Build and deploy"
+
+on:
+  push: # TODO add paths we care about
+  workflow_dispatch:
+
+env:
+  CI: true
+  TZ: Europe/Oslo
+  SLACK_CHANNEL: C04SQEX2858
+  DEV_CLUSTER_NAME: atkv3-dev-user-cluster
+  DEV_KUBERNETES_PROJECT_ID: kubernetes-dev-94b9
+  DEV_SERVICE_ACCOUNT: matrikkel-deploy@matrikkel-dev-fd36.iam.gserviceaccount.com
+  DEV_WORKLOAD_IDENTITY_PROVIDER: projects/422604778482/locations/global/workloadIdentityPools/matrikkel-deploy-pool/providers/github-provider
+  PROD_CLUSTER_NAME: atkv3-prod-user-cluster
+  PROD_KUBERNETES_PROJECT_ID: kubernetes-prod-e4a2
+  PROD_SERVICE_ACCOUNT: matrikkel-deploy@matrikkel-prod-91b2.iam.gserviceaccount.com
+  PROD_WORKLOAD_IDENTITY_PROVIDER: projects/367207507054/locations/global/workloadIdentityPools/matrikkel-deploy-pool/providers/github-provider
+
+concurrency:
+  group: main-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  version:
+    name: Calculate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version-string.outputs.version }}
+      image: ${{ steps.version-string.outputs.image }}
+
+    steps:
+      - name: Generate version string
+        id: version-string
+        shell: bash
+        run: |
+          version="$(date -u '+%Y.%m.%d-%H.%M')-$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/kartverket/matrikkel-kafka-light/broker:${version}" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '23'
+          cache: gradle
+
+      - name: Run tests
+        run: ./gradlew test --no-daemon
+
+  package-image:
+    name: Build and (conditionally) Push Docker Image
+    runs-on: ubuntu-latest
+    needs:
+      - version
+      - test
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GitHub Container Registry
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        env:
+          image: ${{ needs.version.outputs.image }}
+        with:
+          context: .
+          file: apps/broker/Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ${{ env.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Tag commit med artifaktversjon
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git tag ${{ needs.version.outputs.version }}
+          git push origin ${{ needs.version.outputs.version }}
+
+  pharos:
+    name: Run Pharos
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs:
+      - version
+      - package-image
+    permissions:
+      actions: read
+      packages: read
+      contents: read
+      security-events: write
+    steps:
+      - name: "Run Pharos"
+        uses: kartverket/pharos@599d3fe4af8bae19fbfda831662e90ee1c406ec2 # v0.6.3
+        with:
+          image_url: ${{ needs.version.outputs.image }}
+          trivy: true
+          tfsec: true
+          disable_severity_check: true
+
+  deploy-prod-notifier:
+    name: Slack Notify; Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - version
+      - pharos
+      - package-image
+    outputs:
+      messageId: ${{ steps.slack_notify.outputs.messageId }}
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - name: Notify slack (Setup)
+        id: slack_notify
+        uses: kartverket/matrikkel-actions/slack-approval-notifier/setup-octo@main
+        with:
+          identity: 'matrikkel-kafka-light'
+          channel: ${{ env.SLACK_CHANNEL }}
+          environment: 'produksjon'
+          appDescriptor: atkv3-prod:matrikkel-main:matrikkel-kafka-light:${{ needs.version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - version
+      - deploy-prod-notifier
+    environment:
+      name: production
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Notify slack (Update)
+        uses: kartverket/matrikkel-actions/slack-approval-notifier/update-octo@main
+        with:
+          identity: 'matrikkel-kafka-light'
+          channel: ${{ env.SLACK_CHANNEL }}
+          environment: 'produksjon'
+          appDescriptor: atkv3-prod:matrikkel-main:matrikkel-kafka-light:${{ needs.version.outputs.version }}
+          messageId: ${{ needs.deploy-prod-notifier.outputs.messageId }}
+          status: ${{ job.status }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Deploy matrikkel-proxy to production
+        uses: kartverket/matrikkel-actions/apps-repo-deploy@main
+        with:
+          identity: 'matrikkel-kafka-light'
+          apps: |
+            atkv3-prod:matrikkel-main:matrikkel-kafka-light:${{ needs.version.outputs.version }}
+      - name: Verify deployment to production
+        uses: kartverket/matrikkel-actions/k8s-deployment-feedback@main
+        with:
+          cluster: ${{ env.PROD_CLUSTER_NAME }}
+          apps: |
+            matrikkel-main:matrikkel-kafka-light:${{ needs.version.outputs.version }}
+          kubernetes_project_id: ${{ env.PROD_KUBERNETES_PROJECT_ID }}
+          service_account: ${{ env.PROD_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ env.PROD_WORKLOAD_IDENTITY_PROVIDER }}
