@@ -1,6 +1,0 @@
-ktor:
-  deployment:
-    port: 8081
-  application:
-    modules:
-      - no.kartverket.RoutingKt.configureRouting
