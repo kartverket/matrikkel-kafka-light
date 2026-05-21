@@ -1,18 +1,12 @@
 plugins {
-    alias(libs.plugins.kotlin.jvm)
-    alias(ktorLibs.plugins.ktor)
+   id("buildsrc.convention.kotlin-jvm")
+    application
 }
-
-group = "no.kartverket"
-version = "1.0.0-SNAPSHOT"
 
 application {
     mainClass = "io.ktor.server.netty.EngineMain"
 }
 
-kotlin {
-    jvmToolchain(21)
-}
 dependencies {
     implementation(ktorLibs.server.config.yaml)
     implementation(ktorLibs.server.core)
