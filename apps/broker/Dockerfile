@@ -10,6 +10,7 @@ COPY ../.. .
 RUN ./gradlew :installDist --no-daemon
 
 FROM eclipse-temurin:23-jre
+USER app
 WORKDIR /app
 COPY --from=build /workspace/build/install/matrikkel-kafka-light /app
 EXPOSE 8080
