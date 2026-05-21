@@ -4,7 +4,7 @@ plugins {
 }
 
 application {
-    mainClass = "io.ktor.server.netty.EngineMain"
+    mainClass = "no.kartverket.matrikkel.broker.MainKt"
 }
 
 dependencies {
