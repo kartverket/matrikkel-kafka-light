@@ -1,7 +1,7 @@
 name: "[matrikkel-kafka-light] Build and deploy"
 
 on:
-  push: # TODO add paths we care about
+#  push: # TODO add paths we care about
   workflow_dispatch:
 
 env:
