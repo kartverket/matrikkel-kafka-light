@@ -1,4 +1,15 @@
 services:
+  postgres:
+    image: postgres:18.3-alpine
+    env_file:
+      - docker/local-compose.env
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   broker:
     build:
       context: .
