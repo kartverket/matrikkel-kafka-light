@@ -14,6 +14,11 @@ services:
     build:
       context: .
       dockerfile: apps/broker/Dockerfile
+    env_file:
+      - docker/local-compose.env
     ports:
       - "8081:8081"
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
