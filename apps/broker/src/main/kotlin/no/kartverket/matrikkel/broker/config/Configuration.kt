@@ -1,22 +1,18 @@
 package no.kartverket.matrikkel.broker.config
 
 class DatabaseConfiguration(
-    val env: MigrationEnv,
+    val migrationFiles: MigrationLocations,
     val jdbcUrl: String,
     val userCredential: Credential,
     val adminCredential: Credential,
 )
 
-enum class MigrationEnv(
-    val location: Array<String>
-) {
-    LOCAL(arrayOf("db/migration", "db/migration-test")),
-    PROD(arrayOf("db/migration", "db/migration-prod"))
-}
+@JvmInline
+value class MigrationLocations(val locations: Array<String>)
 
 class Configuration(
     val database: DatabaseConfiguration = DatabaseConfiguration(
-        env = MigrationEnv.valueOf(getConfig("DB_ENV") ?: MigrationEnv.PROD.name),
+        migrationFiles = MigrationLocations(arrayOf("db/migration")),
         jdbcUrl = getRequiredConfig("DB_URL"),
         userCredential = Credential.from("DB_USER"),
         adminCredential = Credential.from("DB_ADMIN"),

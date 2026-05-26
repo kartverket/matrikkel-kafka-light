@@ -25,11 +25,11 @@ object DataSourceConfiguration {
             config.adminCredential
         )
             .use {
-                migrate(it, config.env)
+                migrate(it, config.migrationFiles)
             }
     }
 
-    fun migrate(dataSource: DataSource, env: MigrationEnv) = migrate(dataSource, *env.location)
+    fun migrate(dataSource: DataSource, locations: MigrationLocations) = migrate(dataSource, *locations.locations)
     fun migrate(
         dataSource: DataSource,
         vararg locations: String,
