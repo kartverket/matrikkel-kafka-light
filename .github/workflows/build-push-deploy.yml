@@ -109,16 +109,27 @@ jobs:
           tfsec: true
           disable_severity_check: true
 
+  deploy-dev:
+    name: "Deploy Dev"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Dev
+        uses: kartverket/matrikkel-actions/heimdall-deploy@skip-deploy
+        with:
+          cluster: 'atkv3-dev-user-cluster'
+          resource: '.skip/dev.yaml'
+          var: |
+            image=${{ needs.version.outputs.image }},version=${{ needs.version.outputs.version }}
+
   deploy-qa:
     name: "Deploy Prodtest"
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy matrikkel-proxy to production
+      - name: Deploy to prodtest
         uses: kartverket/matrikkel-actions/heimdall-deploy@skip-deploy
         with:
           cluster: 'atkv3-prod-user-cluster'
           resource: '.skip/prodtest.yaml'
-          print_payload: 'false'
           var: |
             image=${{ needs.version.outputs.image }},version=${{ needs.version.outputs.version }}
 
@@ -149,7 +160,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
   deploy-prod:
-    name: Deploy to Production
+    name: Deploy to prod
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     needs:
@@ -176,11 +187,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
-      - name: Deploy matrikkel-proxy to production
+      - name: Deploy to production
         uses: kartverket/matrikkel-actions/heimdall-deploy@skip-deploy
         with:
           cluster: 'atkv3-prod-user-cluster'
           resource: '.skip/prod.yaml'
-          print_payload: 'false'
           var: |
             image=${{ needs.version.outputs.image }},version=${{ needs.version.outputs.version }}
