@@ -8,14 +8,6 @@ env:
   CI: true
   TZ: Europe/Oslo
   SLACK_CHANNEL: C04SQEX2858
-  DEV_CLUSTER_NAME: atkv3-dev-user-cluster
-  DEV_KUBERNETES_PROJECT_ID: kubernetes-dev-94b9
-  DEV_SERVICE_ACCOUNT: matrikkel-deploy@matrikkel-dev-fd36.iam.gserviceaccount.com
-  DEV_WORKLOAD_IDENTITY_PROVIDER: projects/422604778482/locations/global/workloadIdentityPools/matrikkel-deploy-pool/providers/github-provider
-  PROD_CLUSTER_NAME: atkv3-prod-user-cluster
-  PROD_KUBERNETES_PROJECT_ID: kubernetes-prod-e4a2
-  PROD_SERVICE_ACCOUNT: matrikkel-deploy@matrikkel-prod-91b2.iam.gserviceaccount.com
-  PROD_WORKLOAD_IDENTITY_PROVIDER: projects/367207507054/locations/global/workloadIdentityPools/matrikkel-deploy-pool/providers/github-provider
 
 concurrency:
   group: main-${{ github.ref }}
@@ -117,6 +109,30 @@ jobs:
           tfsec: true
           disable_severity_check: true
 
+  deploy-dev:
+    name: "Deploy Dev"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Dev
+        uses: kartverket/matrikkel-actions/heimdall-deploy@skip-deploy
+        with:
+          cluster: 'atkv3-dev-user-cluster'
+          resource: '.skip/dev.yaml'
+          var: |
+            image=${{ needs.version.outputs.image }},version=${{ needs.version.outputs.version }}
+
+  deploy-qa:
+    name: "Deploy Prodtest"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to prodtest
+        uses: kartverket/matrikkel-actions/heimdall-deploy@skip-deploy
+        with:
+          cluster: 'atkv3-prod-user-cluster'
+          resource: '.skip/prodtest.yaml'
+          var: |
+            image=${{ needs.version.outputs.image }},version=${{ needs.version.outputs.version }}
+
   deploy-prod-notifier:
     name: Slack Notify; Deploy to Production
     runs-on: ubuntu-latest
@@ -144,7 +160,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
   deploy-prod:
-    name: Deploy to Production
+    name: Deploy to prod
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     needs:
@@ -171,18 +187,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
-      - name: Deploy matrikkel-proxy to production
-        uses: kartverket/matrikkel-actions/apps-repo-deploy@main
+      - name: Deploy to production
+        uses: kartverket/matrikkel-actions/heimdall-deploy@skip-deploy
         with:
-          identity: 'matrikkel-kafka-light'
-          apps: |
-            atkv3-prod:matrikkel-main:matrikkel-kafka-light:${{ needs.version.outputs.version }}
-      - name: Verify deployment to production
-        uses: kartverket/matrikkel-actions/k8s-deployment-feedback@main
-        with:
-          cluster: ${{ env.PROD_CLUSTER_NAME }}
-          apps: |
-            matrikkel-main:matrikkel-kafka-light:${{ needs.version.outputs.version }}
-          kubernetes_project_id: ${{ env.PROD_KUBERNETES_PROJECT_ID }}
-          service_account: ${{ env.PROD_SERVICE_ACCOUNT }}
-          workload_identity_provider: ${{ env.PROD_WORKLOAD_IDENTITY_PROVIDER }}
+          cluster: 'atkv3-prod-user-cluster'
+          resource: '.skip/prod.yaml'
+          var: |
+            image=${{ needs.version.outputs.image }},version=${{ needs.version.outputs.version }}

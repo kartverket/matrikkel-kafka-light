@@ -1,0 +1,30 @@
+apiVersion: skiperator.kartverket.no/v1alpha1
+kind: Application
+metadata:
+  name: matrikkel-kafka-light
+  namespace: matrikkel-prodtest
+spec:
+  image: "{{ image }}"
+  port: 8081
+  ingresses:
+    - matrikkel-kafka-light-prodtest.atkv3-prod.kartverket-intern.cloud
+  replicas: 1
+
+  liveness:
+    port: 8081
+    path: /internal/isAlive
+    initialDelay: 10      # default: 0
+    failureThreshold: 6   # default: 3
+  readiness:
+    port: 8081
+    path: /internal/isReady
+    initialDelay: 10      # default: 0
+    failureThreshold: 6   # default: 3
+  prometheus:
+    port: 8081
+    path: /internal/metrics
+    allowAllMetrics: true
+
+  env:
+    - name: VERSION
+      value: "{{ version }}"
