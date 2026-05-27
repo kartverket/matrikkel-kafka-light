@@ -1,9 +1,14 @@
 [versions]
 kotlin = "2.3.21"
-logback = "1.5.33"
+logback = "1.5.34"
 flywayVersion = "12.7.0"
 postgresqlVersion = "42.7.11"
 hikariVersion = "7.0.2"
+kotliquery = "1.9.1"
+testcontainers = "1.21.4"
+junitVersion = "6.1.0"
+mockk="1.14.11"
+assertkVersion = "0.28.1"
 
 [libraries]
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
@@ -14,6 +19,30 @@ flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", versio
 hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikariVersion" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresqlVersion" }
 h2 = { module = "com.h2database:h2", version = "2.4.240"}
+kotliquery = { module = "com.github.seratch:kotliquery", version.ref = "kotliquery" }
+
+junitApi = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junitVersion" }
+junitEngine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junitVersion" }
+junitParams = { module = "org.junit.jupiter:junit-jupiter-params", version.ref = "junitVersion" }
+junitPlatformLauncher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junitVersion" }
+assertk = { module = "com.willowtreeapps.assertk:assertk-jvm", version.ref = "assertkVersion" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk"}
+
+testcontainers-postgres = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
+testcontainers-junit = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
+
+[bundles]
+testEcosystem = [
+    "logback-classic",
+    "junitApi",
+    "junitEngine",
+    "junitParams",
+    "assertk",
+    "mockk",
+    "testcontainers-postgres",
+    "testcontainers-junit",
+    "junitPlatformLauncher"
+]
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

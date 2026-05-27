@@ -12,12 +12,16 @@ value class MigrationLocations(val locations: Array<String>)
 
 class Configuration(
     val database: DatabaseConfiguration = DatabaseConfiguration(
-        migrationFiles = MigrationLocations(arrayOf("db/migration")),
+        migrationFiles = defaultMigrationLocations,
         jdbcUrl = getRequiredConfig("DB_URL"),
         userCredential = Credential.from("DB_USER"),
         adminCredential = Credential.from("DB_ADMIN"),
-    ),
-)
+    )
+) {
+  companion object {
+      val defaultMigrationLocations = MigrationLocations(arrayOf("db/migration"))
+  }
+}
 
 class Credential(
     val username: String,
