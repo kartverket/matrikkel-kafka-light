@@ -112,6 +112,13 @@ jobs:
   deploy-dev:
     name: "Deploy Dev"
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - version
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
     steps:
       - name: Deploy to Dev
         uses: kartverket/matrikkel-actions/heimdall-deploy@skip-deploy
@@ -124,6 +131,15 @@ jobs:
   deploy-qa:
     name: "Deploy Prodtest"
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - version
+      - deploy-dev
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+
     steps:
       - name: Deploy to prodtest
         uses: kartverket/matrikkel-actions/heimdall-deploy@skip-deploy
@@ -141,6 +157,7 @@ jobs:
       - version
       - pharos
       - package-image
+      - deploy-qa
     outputs:
       messageId: ${{ steps.slack_notify.outputs.messageId }}
     permissions:
