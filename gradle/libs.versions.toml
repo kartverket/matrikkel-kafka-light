@@ -13,6 +13,7 @@ flyway = { module = "org.flywaydb:flyway-core", version.ref = "flywayVersion" }
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flywayVersion" }
 hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikariVersion" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresqlVersion" }
+h2 = { module = "com.h2database:h2", version = "2.4.240"}
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

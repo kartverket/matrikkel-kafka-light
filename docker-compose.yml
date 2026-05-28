@@ -1,8 +1,10 @@
 services:
   postgres:
     image: postgres:18.3-alpine
-    env_file:
-      - docker/local-compose-postgres.env
+    environment:
+      - POSTGRES_URL=jdbc:postgresql://postgres:5432/postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
     ports:
       - "5432:5432"
     healthcheck:
