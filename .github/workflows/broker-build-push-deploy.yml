@@ -1,7 +1,13 @@
-name: "[matrikkel-kafka-light] Build and deploy"
+name: "[broker] Build and deploy"
 
 on:
-#  push: # TODO add paths we care about
+  push:
+    paths:
+      - .github/workflows/**
+      - .skip/**
+      - apps/broker/**
+      - buildSrc/**
+      - gradle/libs.versions.toml
   workflow_dispatch:
 
 env:
@@ -10,7 +16,7 @@ env:
   SLACK_CHANNEL: C04SQEX2858
 
 concurrency:
-  group: main-${{ github.ref }}
+  group: broker-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
