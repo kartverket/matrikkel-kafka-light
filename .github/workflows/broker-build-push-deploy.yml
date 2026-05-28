@@ -130,7 +130,6 @@ jobs:
       - name: Deploy to Dev
         uses: kartverket/matrikkel-actions/heimdall-deploy@main
         with:
-          wait: 'false'
           cluster: 'atkv3-dev'
           resource: '.skip/dev.yaml'
           var: |
@@ -152,7 +151,6 @@ jobs:
       - name: Deploy to prodtest
         uses: kartverket/matrikkel-actions/heimdall-deploy@main
         with:
-          wait: 'false'
           cluster: 'atkv3-prod'
           resource: '.skip/prodtest.yaml'
           var: |
@@ -216,7 +214,6 @@ jobs:
       - name: Deploy to production
         uses: kartverket/matrikkel-actions/heimdall-deploy@main
         with:
-          wait: 'false'
           cluster: 'atkv3-prod'
           resource: '.skip/prod.yaml'
           var: |
