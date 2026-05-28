@@ -122,7 +122,7 @@ jobs:
       id-token: write
     steps:
       - name: Deploy to Dev
-        uses: kartverket/matrikkel-actions/heimdall-deploy@skip-deploy
+        uses: kartverket/matrikkel-actions/heimdall-deploy@main
         with:
           wait: 'false'
           cluster: 'atkv3-dev'
@@ -144,7 +144,7 @@ jobs:
 
     steps:
       - name: Deploy to prodtest
-        uses: kartverket/matrikkel-actions/heimdall-deploy@skip-deploy
+        uses: kartverket/matrikkel-actions/heimdall-deploy@main
         with:
           wait: 'false'
           cluster: 'atkv3-prod'
@@ -208,7 +208,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
       - name: Deploy to production
-        uses: kartverket/matrikkel-actions/heimdall-deploy@skip-deploy
+        uses: kartverket/matrikkel-actions/heimdall-deploy@main
         with:
           wait: 'false'
           cluster: 'atkv3-prod'
