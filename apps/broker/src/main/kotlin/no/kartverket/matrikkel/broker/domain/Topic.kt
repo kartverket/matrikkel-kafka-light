@@ -10,7 +10,7 @@ data class Topic(
     val tombstonesAllowed: Boolean = true,
 ) {
     init {
-        // TODO validate
+        require(TopicName.isValid(name)) { "Invalid topic name '$name'" }
     }
 }
 
@@ -27,4 +27,10 @@ data class TopicAccessControlList(
     fun canPublish(identity: ServiceIdentity): Boolean = publishIdentities.allows(identity)
     fun canConsume(identity: ServiceIdentity): Boolean = consumeIdentities.allows(identity)
     private fun Set<String>.allows(identity: ServiceIdentity): Boolean = WILDCARD in this || identity.value in this
+}
+
+object TopicName {
+    private val pattern = Regex("^[a-zA-Z0-9._-]{1,128}$")
+
+    fun isValid(value: String): Boolean = pattern.matches(value)
 }
