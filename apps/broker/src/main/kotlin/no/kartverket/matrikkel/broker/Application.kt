@@ -20,6 +20,5 @@ fun runApplication() {
 
     KtorServer.create(factory = Netty, port = 8081){
         configureRouting()
-        //konfigurer her
     }.start(wait = true)
 }
