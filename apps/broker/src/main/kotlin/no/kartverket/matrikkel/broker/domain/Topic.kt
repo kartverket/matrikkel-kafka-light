@@ -1,13 +1,18 @@
 package no.kartverket.matrikkel.broker.domain
 
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 data class Topic(
-    val key: TopicKey,
-    val leaseTime: Duration,
-    val tombstonesAllowed: Boolean,
+    val name: String,
     val acl: TopicAccessControlList,
-)
+    val leaseTime: Duration = 30.seconds,
+    val tombstonesAllowed: Boolean = true,
+) {
+    init {
+        // TODO validate
+    }
+}
 
 @JvmInline
 value class ServiceIdentity(val value: String)
@@ -22,7 +27,4 @@ data class TopicAccessControlList(
     fun canPublish(identity: ServiceIdentity): Boolean = publishIdentities.allows(identity)
     fun canConsume(identity: ServiceIdentity): Boolean = consumeIdentities.allows(identity)
     private fun Set<String>.allows(identity: ServiceIdentity): Boolean = WILDCARD in this || identity.value in this
-}
-enum class TopicKey(val displayName: String) {
-    DEFAULT_TOPIC("Default topic")
 }

@@ -1,13 +1,20 @@
 package no.kartverket.matrikkel.broker.repository.topics
 
 import kotliquery.Session
-import no.kartverket.matrikkel.broker.repository.Repository
+import java.time.Instant
 
-interface TopicsRepository : Repository {
-    fun getTopics(): Set<TopicsReadDTO>
-    fun getTopics(session: Session): Set<TopicsReadDTO>
+interface TopicsRepository {
+    data class TopicsDTO(
+        val topic: String,
+        val active: Boolean,
+        val currentHead: Long,
+        val updatedAt: Instant
+    )
+
+    fun getTopics(): Set<TopicsDTO>
+    fun getTopics(session: Session): Set<TopicsDTO>
     fun addTopic(topic : String)
-    fun addTopic(topic : String, session: Session)
+    fun addTopic(session: Session, topic: String)
     fun updateActive(topic: String, active: Boolean)
-    fun updateActive(topic: String, active: Boolean, session: Session)
+    fun updateActive(session: Session, topic: String, active: Boolean)
 }

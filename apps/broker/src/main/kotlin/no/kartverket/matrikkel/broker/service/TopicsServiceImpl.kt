@@ -1,13 +1,11 @@
 package no.kartverket.matrikkel.broker.service
 
-import no.kartverket.matrikkel.broker.config.TopicConfiguration
+import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.repository.topics.TopicsRepository
 
 class TopicsServiceImpl (val topicsRepository: TopicsRepository)  : TopicsService {
-
-
-    fun reconcileTopics(topicConfiguration: TopicConfiguration) {
-        val topicsInConfig = topicConfiguration.topicCatalog.all().associateBy { it.key.name }
+    override fun reconcileTopics(topics: List<Topic>) {
+        val topicsInConfig = topics.associateBy { it.name }
         val topicsInDb = topicsRepository.getTopics().associateBy { it.topic }
 
         val activeTopicsInDb = topicsInDb.filter { it.value.active }

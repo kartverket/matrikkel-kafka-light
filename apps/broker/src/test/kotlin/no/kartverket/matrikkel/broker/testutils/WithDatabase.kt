@@ -30,7 +30,7 @@ interface WithDatabase {
         @BeforeAll
         @JvmStatic
         fun setup(): Unit {
-            DataSourceConfiguration.migrate(dataSource, Configuration.Companion.defaultMigrationLocations)
+            DataSourceConfiguration.migrate(dataSource)
         }
     }
 
