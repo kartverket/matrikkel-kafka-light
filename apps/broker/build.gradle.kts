@@ -11,6 +11,12 @@ dependencies {
     implementation(ktorLibs.server.config.yaml)
     implementation(ktorLibs.server.core)
     implementation(ktorLibs.server.netty)
+    implementation(ktorLibs.server.auth)
+    implementation(ktorLibs.server.auth.jwt)
+    implementation(ktorLibs.client.cio)
+    implementation(ktorLibs.client.contentNegotiation)
+    implementation(ktorLibs.serialization.kotlinx.json)
+    implementation(libs.slf4j)
     implementation(libs.logback.classic)
 
     implementation(libs.flyway)

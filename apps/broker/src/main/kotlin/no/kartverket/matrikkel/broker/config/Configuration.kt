@@ -1,8 +1,10 @@
 package no.kartverket.matrikkel.broker.config
 
+import io.ktor.http.HttpHeaders
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
+import no.kartverket.matrikkel.broker.plugins.Security
 import kotlin.time.Duration.Companion.minutes
 
 class DatabaseConfiguration(
@@ -12,6 +14,13 @@ class DatabaseConfiguration(
 )
 
 class Configuration(
+    val azuread: Security.AuthProvider = Security.AuthProvider(
+        name = "azuread",
+        jwksConfig = Security.JwksConfig.OidcWellkownUrl(
+            getRequiredConfig("AZURE_APP_WELL_KNOWN_URL")
+        ),
+        tokenLocation = Security.TokenLocation.Header(HttpHeaders.Authorization)
+    ),
     val database: DatabaseConfiguration = DatabaseConfiguration(
         jdbcUrl = getRequiredConfig("DB_URL"),
         userCredential = Credential.from("DB_USER"),
