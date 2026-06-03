@@ -1,22 +1,35 @@
 package no.kartverket.matrikkel.broker.config
 
+import no.kartverket.matrikkel.broker.domain.Topic
+import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
+import no.kartverket.matrikkel.broker.domain.TopicCatalog
+import kotlin.time.Duration.Companion.minutes
+
 class DatabaseConfiguration(
-    val migrationFiles: MigrationLocations,
     val jdbcUrl: String,
     val userCredential: Credential,
     val adminCredential: Credential,
 )
 
-@JvmInline
-value class MigrationLocations(val locations: Array<String>)
-
 class Configuration(
     val database: DatabaseConfiguration = DatabaseConfiguration(
-        migrationFiles = MigrationLocations(arrayOf("db/migration")),
         jdbcUrl = getRequiredConfig("DB_URL"),
         userCredential = Credential.from("DB_USER"),
         adminCredential = Credential.from("DB_ADMIN"),
     ),
+    val topicsCatalog: TopicCatalog = TopicCatalog(
+        listOf(
+            Topic(
+                name = "DEFAULT_TOPIC",
+                leaseTime = 5.minutes,
+                tombstonesAllowed = false,
+                acl = TopicAccessControlList(
+                    publishIdentities = setOf(TopicAccessControlList.WILDCARD),
+                    consumeIdentities = setOf(TopicAccessControlList.WILDCARD),
+                ),
+            ),
+        )
+    )
 )
 
 class Credential(

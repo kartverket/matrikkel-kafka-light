@@ -25,19 +25,14 @@ object DataSourceConfiguration {
             config.adminCredential
         )
             .use {
-                migrate(it, config.migrationFiles)
+                migrate(it)
             }
     }
 
-    fun migrate(dataSource: DataSource, locations: MigrationLocations) = migrate(dataSource, *locations.locations)
-    fun migrate(
-        dataSource: DataSource,
-        vararg locations: String,
-    ) {
+    fun migrate(dataSource: DataSource) {
         Flyway
             .configure()
             .dataSource(dataSource)
-            .locations(*locations)
             .baselineOnMigrate(true)
             .baselineVersion("0")
             .load()

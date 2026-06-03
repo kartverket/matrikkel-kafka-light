@@ -18,7 +18,9 @@ dependencies {
     implementation(libs.hikari)
     implementation(libs.postgresql)
     implementation(libs.h2)
+    implementation(libs.kotliquery)
 
     testImplementation(kotlin("test"))
     testImplementation(ktorLibs.server.testHost)
+    testImplementation(libs.bundles.testEcosystem)
 }
