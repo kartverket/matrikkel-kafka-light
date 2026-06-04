@@ -27,7 +27,7 @@ spec:
 
   azure:
     application:
-      enable: true
+      enabled: true
 
   env:
     - name: VERSION
