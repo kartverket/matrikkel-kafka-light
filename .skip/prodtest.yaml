@@ -25,6 +25,10 @@ spec:
     path: /internal/metrics
     allowAllMetrics: true
 
+  azure:
+    application:
+      enable: true
+
   env:
     - name: VERSION
       value: "{{ version }}"

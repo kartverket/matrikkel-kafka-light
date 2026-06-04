@@ -1,12 +1,14 @@
 package no.kartverket.matrikkel.broker
 
+import io.ktor.server.application.*
 import io.ktor.server.netty.*
 import no.kartverket.matrikkel.broker.config.Configuration
 import no.kartverket.matrikkel.broker.config.DataSourceConfiguration
+import no.kartverket.matrikkel.broker.plugins.Security
 import no.kartverket.matrikkel.broker.repository.topics.TopicsRepositoryImpl
 import no.kartverket.matrikkel.broker.service.TopicsServiceImpl
 
-fun runApplication() {
+fun runApplication(disableSecurity: Boolean = false) {
     val config = Configuration()
     DataSourceConfiguration.migrate(config.database)
 
@@ -18,7 +20,11 @@ fun runApplication() {
     )
     topicService.reconcileTopics(config.topicsCatalog.topics)
 
-    KtorServer.create(factory = Netty, port = 8081){
+    KtorServer.create(factory = Netty, port = 8081) {
+        install(Security.Plugin) {
+            this.disableSecurity = disableSecurity
+            providers += config.azuread
+        }
         configureRouting()
     }.start(wait = true)
 }
