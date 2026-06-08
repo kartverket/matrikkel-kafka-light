@@ -10,6 +10,13 @@ spec:
     - matrikkel-kafka-light.atkv3-prod.kartverket-intern.cloud
   replicas: 1
 
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
   liveness:
     port: 8081
     path: /internal/isAlive
