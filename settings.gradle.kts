@@ -21,3 +21,4 @@ plugins {
 }
 
 include(":apps:broker")
+include(":libs:client")
