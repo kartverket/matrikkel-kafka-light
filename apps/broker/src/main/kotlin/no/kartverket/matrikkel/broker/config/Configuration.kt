@@ -14,6 +14,7 @@ class DatabaseConfiguration(
 )
 
 class Configuration(
+    val version: String = getRequiredConfig("VERSION"),
     val azuread: Security.AuthProvider = Security.AuthProvider(
         name = "azuread",
         jwksConfig = Security.JwksConfig.OidcWellkownUrl(
