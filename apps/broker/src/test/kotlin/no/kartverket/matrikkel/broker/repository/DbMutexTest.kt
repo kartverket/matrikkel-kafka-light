@@ -88,7 +88,7 @@ class DbMutexTest : WithDatabase {
         }
     }
 
-    object Lock : DbMutex.LockUsage {
+    object Lock : DbMutex.LockScope {
         override val seed: Long = 123L
     }
     fun insertNext(doLocking: Boolean) {
