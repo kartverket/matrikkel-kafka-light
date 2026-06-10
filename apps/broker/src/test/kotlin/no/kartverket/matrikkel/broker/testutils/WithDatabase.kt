@@ -26,6 +26,9 @@ interface WithDatabase {
             }
         )
 
+        fun dataSource(): DataSource = dataSource
+        fun connectionUrl(): String = postgres.jdbcUrl
+
 
         @BeforeAll
         @JvmStatic
@@ -39,13 +42,13 @@ interface WithDatabase {
         println("Removing database data")
         dataSource.connection.use { connection ->
             connection.createStatement().use { stmt ->
-                stmt.execute(
-                    """
-                    truncate table topics
-                    restart identity
-                    ;
-                    """.trimIndent()
-                )
+//                stmt.execute(
+//                    """
+//                    truncate table topics
+//                    restart identity
+//                    ;
+//                    """.trimIndent()
+//                )
             }
         }
     }
