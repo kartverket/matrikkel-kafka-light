@@ -46,7 +46,7 @@ object Metrics {
     }
 
     val Plugin =
-        createApplicationPlugin("MatrikkelMetrics", ::Config) {
+        createApplicationPlugin("Metrics", ::Config) {
             val config = pluginConfig
             application.install(MicrometerMetrics) {
                 this.registry = Metrics.registry
