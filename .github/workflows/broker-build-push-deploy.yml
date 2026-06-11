@@ -52,6 +52,8 @@ jobs:
 
       - name: Run tests
         run: ./gradlew test --no-daemon
+        env:
+          PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   package-image:
     name: Build and (conditionally) Push Docker Image
