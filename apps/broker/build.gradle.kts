@@ -20,6 +20,7 @@ dependencies {
     implementation(libs.slf4j)
     implementation(libs.logback.classic)
     implementation(libs.micrometerPrometheus)
+    implementation(libs.ktorUtils)
 
     implementation(libs.flyway)
     implementation(libs.flyway.postgresql)

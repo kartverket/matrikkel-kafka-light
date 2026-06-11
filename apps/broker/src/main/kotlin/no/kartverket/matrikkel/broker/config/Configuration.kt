@@ -1,10 +1,12 @@
 package no.kartverket.matrikkel.broker.config
 
 import io.ktor.http.HttpHeaders
+import no.kartverket.heimdall.common.ktor.plugins.security.Security
+import no.kartverket.heimdall.common.ktor.utils.EnvUtils.getConfig
+import no.kartverket.heimdall.common.ktor.utils.EnvUtils.getRequiredConfig
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
-import no.kartverket.matrikkel.broker.plugins.Security
 import kotlin.time.Duration.Companion.minutes
 
 class DatabaseConfiguration(
@@ -54,15 +56,6 @@ class Credential(
     }
 }
 
-private fun getConfig(name: String): String? {
-    return System.getProperty(name, System.getenv(name))
-}
-
-private fun getRequiredConfig(name: String): String {
-    return requireNotNull(getConfig(name)) {
-        "$name must be defined in java properties or environment"
-    }
-}
 
 private fun firstNonNullOf(vararg name: String): String {
     return name.firstNotNullOf { getConfig(it) }
