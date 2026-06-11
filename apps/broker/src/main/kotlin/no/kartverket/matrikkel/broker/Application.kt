@@ -1,22 +1,35 @@
 package no.kartverket.matrikkel.broker
 
+import com.sun.tools.attach.spi.AttachProvider.providers
 import io.ktor.server.application.*
+import io.ktor.server.auth.Authentication
 import io.ktor.server.netty.*
+import no.kartverket.heimdall.common.ktor.plugins.Metrics
+import no.kartverket.heimdall.common.ktor.plugins.selftest.Selftest
+import no.kartverket.heimdall.common.ktor.plugins.security.Security
 import no.kartverket.matrikkel.broker.config.Configuration
 import no.kartverket.matrikkel.broker.config.DataSourceConfiguration
-import no.kartverket.matrikkel.broker.plugins.Metrics
-import no.kartverket.matrikkel.broker.plugins.Security
 
 fun runApplication(disableSecurity: Boolean = false) {
     val config = Configuration()
+    val security = Security(
+        config.azuread
+    )
     DataSourceConfiguration.migrate(config.database)
 
     KtorServer.create(factory = Netty, port = 8081) {
-        install(Security.Plugin) {
-            this.disableSecurity = disableSecurity
-            providers += config.azuread
+        install(Authentication) {
+            if (disableSecurity) {
+                security.setupMock()
+            } else {
+                security.setupAuth()
+            }
         }
         install(Metrics.Plugin)
+        install(Selftest.Plugin) {
+            appname = "matrikkel-kafka-light"
+            version = config.version
+        }
         configureRouting()
     }.start(wait = true)
 }
