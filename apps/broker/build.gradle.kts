@@ -8,6 +8,7 @@ application {
 }
 
 dependencies {
+    implementation(project(":libs:client"))
     implementation(ktorLibs.server.config.yaml)
     implementation(ktorLibs.server.core)
     implementation(ktorLibs.server.netty)

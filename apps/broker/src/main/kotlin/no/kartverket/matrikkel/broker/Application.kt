@@ -16,6 +16,7 @@ import no.kartverket.heimdall.common.ktor.utils.KtorServer
 import no.kartverket.matrikkel.broker.api.topicRoutes
 import no.kartverket.matrikkel.broker.config.Configuration
 import no.kartverket.matrikkel.broker.config.DataSourceConfiguration
+import no.kartverket.matrikkel.broker.service.Messages
 
 fun runApplication(disableSecurity: Boolean = false) {
     val config = Configuration()
@@ -53,7 +54,10 @@ fun runApplication(disableSecurity: Boolean = false) {
 
         routing {
             authenticate(*security.authproviders) {
-                topicRoutes()
+                topicRoutes(
+                    topicCatalog = config.topicsCatalog,
+                    messageService = Messages.ServiceImpl(),
+                )
             }
         }
     }.start(wait = true)

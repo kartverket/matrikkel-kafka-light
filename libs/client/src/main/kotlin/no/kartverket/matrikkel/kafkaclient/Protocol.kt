@@ -33,14 +33,13 @@ class CommitRequest
 class CommitResponse
 
 @Serializable
+class SeekRequest
+
+@Serializable
+class SeekResponse
+
+@Serializable
 class HeartbeatRequest
 
 @Serializable
 class HeartbeatResponse
-
-@Serializable
-class ResetRequest
-
-@Serializable
-class ResetResponse
-
