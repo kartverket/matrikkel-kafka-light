@@ -10,46 +10,22 @@ import kotliquery.queryOf
 import kotliquery.sessionOf
 import no.kartverket.matrikkel.broker.repository.DbMutex
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
-import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase.Companion.dataSource
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import kotlin.uuid.Uuid
 
 class DbMutexTest : WithDatabase {
-
-    companion object {
-        @JvmStatic
-        @BeforeAll
-        fun setup() {
-            sessionOf(dataSource()).use { session ->
-                val query = queryOf("""
-                    create table if not exists testtable(
-                        sequence bigint not null primary key,
-                        value text not null
-                    )
-                """.trimIndent())
-                session.run(query.asExecute)
-            }
-        }
-
-        @JvmStatic
-        @AfterAll
-        fun teardown() {
-            sessionOf(dataSource()).use { session ->
-                val query = queryOf("drop table testtable")
-                session.run(query.asExecute)
-            }
-        }
-    }
-
-    @AfterEach
-    fun cleanup() {
+    @BeforeEach
+    fun setup() {
         sessionOf(dataSource()).use { session ->
-            val query = queryOf("truncate testtable").asExecute
-            session.run(query)
+            val query = queryOf("""
+                create table if not exists testtable(
+                    sequence bigint not null primary key,
+                    value text not null
+                )
+            """.trimIndent())
+            session.run(query.asExecute)
         }
     }
 
