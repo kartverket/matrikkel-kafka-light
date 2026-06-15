@@ -14,7 +14,7 @@ ktorUtils = { module = "no.kartverket.heimdall.common:ktor-utils", version.ref =
 
 flyway = { module = "org.flywaydb:flyway-core", version.ref = "flywayVersion" }
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flywayVersion" }
-hikari = { module = "com.zaxxer:HikariCP", version = "7.0.2" }
+hikari = { module = "com.zaxxer:HikariCP", version = "7.1.0" }
 postgresql = { module = "org.postgresql:postgresql", version = "42.7.11" }
 h2 = { module = "com.h2database:h2", version = "2.4.240"}
 kotliquery = { module = "com.github.seratch:kotliquery", version = "1.9.1" }
