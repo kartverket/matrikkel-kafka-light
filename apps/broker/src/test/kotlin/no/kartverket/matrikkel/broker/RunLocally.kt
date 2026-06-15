@@ -21,5 +21,5 @@ class Env {
 fun main() {
     // Env.load("docker/local-postgres.env")
     Env.load("docker/local-h2.env")
-    runApplication(disableSecurity = false)
+    runApplication(disableSecurity = true)
 }
