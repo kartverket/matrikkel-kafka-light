@@ -1,12 +1,12 @@
 package no.kartverket.matrikkel.broker
 
-import com.sun.tools.attach.spi.AttachProvider.providers
 import io.ktor.server.application.*
 import io.ktor.server.auth.Authentication
 import io.ktor.server.netty.*
 import no.kartverket.heimdall.common.ktor.plugins.Metrics
 import no.kartverket.heimdall.common.ktor.plugins.selftest.Selftest
 import no.kartverket.heimdall.common.ktor.plugins.security.Security
+import no.kartverket.heimdall.common.ktor.utils.KtorServer
 import no.kartverket.matrikkel.broker.config.Configuration
 import no.kartverket.matrikkel.broker.config.DataSourceConfiguration
 
@@ -30,6 +30,5 @@ fun runApplication(disableSecurity: Boolean = false) {
             appname = "matrikkel-kafka-light"
             version = config.version
         }
-        configureRouting()
     }.start(wait = true)
 }
