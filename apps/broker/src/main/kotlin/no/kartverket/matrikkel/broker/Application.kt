@@ -5,6 +5,7 @@ import io.ktor.server.application.*
 import io.ktor.server.auth.Authentication
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.statuspages.*
 import kotlinx.serialization.json.Json
 import no.kartverket.heimdall.common.ktor.plugins.Metrics
 import no.kartverket.heimdall.common.ktor.plugins.selftest.Selftest
@@ -28,6 +29,10 @@ fun runApplication(disableSecurity: Boolean = false) {
                     encodeDefaults = true
                 }
             )
+        }
+
+        install(StatusPages) {
+            configureExceptionHandling()
         }
 
         install(Authentication) {

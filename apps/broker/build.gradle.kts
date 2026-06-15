@@ -11,6 +11,7 @@ dependencies {
     implementation(ktorLibs.server.config.yaml)
     implementation(ktorLibs.server.core)
     implementation(ktorLibs.server.netty)
+    implementation(ktorLibs.server.statusPages)
     implementation(ktorLibs.server.contentNegotiation)
     implementation(ktorLibs.server.auth)
     implementation(ktorLibs.server.auth.jwt)
