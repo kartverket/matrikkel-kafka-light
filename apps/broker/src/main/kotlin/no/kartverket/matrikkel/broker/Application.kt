@@ -1,8 +1,11 @@
 package no.kartverket.matrikkel.broker
 
+import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
 import io.ktor.server.auth.Authentication
 import io.ktor.server.netty.*
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import kotlinx.serialization.json.Json
 import no.kartverket.heimdall.common.ktor.plugins.Metrics
 import no.kartverket.heimdall.common.ktor.plugins.selftest.Selftest
 import no.kartverket.heimdall.common.ktor.plugins.security.Security
@@ -18,6 +21,15 @@ fun runApplication(disableSecurity: Boolean = false) {
     DataSourceConfiguration.migrate(config.database)
 
     KtorServer.create(factory = Netty, port = 8081) {
+        install(ContentNegotiation) {
+            json(
+                Json {
+                    ignoreUnknownKeys = true
+                    encodeDefaults = true
+                }
+            )
+        }
+
         install(Authentication) {
             if (disableSecurity) {
                 security.setupMock()
