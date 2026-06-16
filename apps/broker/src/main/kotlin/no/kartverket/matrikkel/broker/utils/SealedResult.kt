@@ -2,12 +2,12 @@ package no.kartverket.matrikkel.broker.utils
 
 sealed interface SealedResult<out T : Any> {
     data class Success<T : Any>(val value: T) : SealedResult<T>
-    data class Failure<T : Any>(val error: Exception) : SealedResult<T>
+    data class Failure(val error: Exception) : SealedResult<Nothing>
 
     companion object {
         fun <T : Any> success(value: T) = Success(value)
-        fun <T : Any> failure(value: Exception) = Failure<T>(value)
-        fun <T : Any> failure(value: String) = Failure<T>(Exception(value))
+        fun failure(value: Exception) = Failure(value)
+        fun failure(value: String) = Failure(Exception(value))
     }
 }
 

@@ -10,29 +10,42 @@ import no.kartverket.matrikkel.broker.ServiceException
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
-import no.kartverket.matrikkel.broker.service.Messages
+import no.kartverket.matrikkel.broker.service.records.Records
 import no.kartverket.matrikkel.broker.utils.SealedResult
+import no.kartverket.matrikkel.kafkaclient.PublishRequest
 
 fun Route.topicRoutes(
     topicCatalog: TopicCatalog,
-    messageService: Messages.Service,
+    recordsService: Records.Service,
 ) {
     with(topicCatalog) {
         route("/topics/{topic}") {
             post("publish") {
-                // TODO VALIDATE HERE? Or in Messages.Service?
+                val topic = call.topicParam()
+                val identity = call.serviceIdentity()
+                val request = call.receive<PublishRequest>()
+
                 call.respondResult(
-                    messageService.publish(
-                        topic = call.topicParam(),
-                        identity = call.serviceIdentity(),
-                        request = call.receive(),
-                    )
+                    when {
+                        !topic.acl.canPublish(identity) -> forbidden()
+                        request.payload == null && !topic.tombstonesAllowed -> badRequest("tombstone_not_allow", "Payload cannot be null")
+                        request.recordKey.isBlank() -> badRequest("invalid_request", "recordKey cannot be blank")
+                        request.idempotencyKey.isBlank() -> badRequest("invalid_request", "idempotencyKey cannot be blank")
+                        request.correlationId.isBlank() -> badRequest("invalid_request", "correlationId cannot be blank")
+                        else -> {
+                            recordsService.publish(
+                                topic = topic,
+                                identity = identity,
+                                request = request,
+                            )
+                        }
+                    }
                 )
             }
 
             post("poll") {
                 call.respondResult(
-                    messageService.poll(
+                    recordsService.poll(
                         topic = call.topicParam(),
                         identity = call.serviceIdentity(),
                         request = call.receive(),
@@ -42,7 +55,7 @@ fun Route.topicRoutes(
 
             post("commit") {
                 call.respondResult(
-                    messageService.commit(
+                    recordsService.commit(
                         topic = call.topicParam(),
                         identity = call.serviceIdentity(),
                         request = call.receive(),
@@ -52,7 +65,7 @@ fun Route.topicRoutes(
 
             post("seek") {
                 call.respondResult(
-                    messageService.seek(
+                    recordsService.seek(
                         topic = call.topicParam(),
                         identity = call.serviceIdentity(),
                         request = call.receive(),
@@ -62,7 +75,7 @@ fun Route.topicRoutes(
 
             post("heartbeat") {
                 call.respondResult(
-                    messageService.heartbeat(
+                    recordsService.heartbeat(
                         topic = call.topicParam(),
                         identity = call.serviceIdentity(),
                         request = call.receive(),
@@ -75,7 +88,7 @@ fun Route.topicRoutes(
 private suspend fun <T : Any> ApplicationCall.respondResult(result: SealedResult<T>) {
     when (result) {
         is SealedResult.Success<*> -> respond(result.value)
-        is SealedResult.Failure<*> -> throw result.error
+        is SealedResult.Failure -> throw result.error
     }
 }
 
@@ -98,3 +111,14 @@ private fun ApplicationCall.serviceIdentity(): ServiceIdentity {
     }
     return ServiceIdentity(subject)
 }
+
+private fun forbidden(
+    code: String = "forbidden",
+    message: String = "Service identity not authorized to execute command on this topic"
+) = ServiceException
+    .forbidden(code = code, message = message)
+    .asSealedResult()
+
+private fun badRequest(code: String, message: String) = ServiceException
+    .badRequest(code = code, message = message)
+    .asSealedResult()
