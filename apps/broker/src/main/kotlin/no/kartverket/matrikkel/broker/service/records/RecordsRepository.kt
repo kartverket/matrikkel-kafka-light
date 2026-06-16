@@ -1,13 +1,17 @@
 package no.kartverket.matrikkel.broker.service.records
 
 import kotliquery.Session
+import kotliquery.TransactionalSession
 import kotliquery.queryOf
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
+import no.kartverket.matrikkel.broker.repository.DbMutex.DbLockAcquired
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
 import org.intellij.lang.annotations.Language
 import kotlin.time.toKotlinInstant
+import kotlin.uuid.toJavaUuid
+import kotlin.uuid.toKotlinUuid
 
 object RecordsRepository {
     context(tx: Session)
@@ -30,7 +34,7 @@ object RecordsRepository {
                     sequence = it.long("sequence"),
                     recordKey = it.string("record_key"),
                     idempotencyKey = idempotencyKey,
-                    correlationId = it.string("correlation_id"),
+                    correlationId = it.uuid("correlation_id").toKotlinUuid(),
                     publishedAt = it.instant("published_at").toKotlinInstant()
                 )
             }
@@ -42,26 +46,27 @@ object RecordsRepository {
     context(tx: Session)
     fun currentHeadForTopic(topic: Topic): Long {
         @Language("SQL")
-        val query = queryOf("""
+        val query = queryOf(
+            """
             SELECT sequence FROM records
             WHERE topic = ?
             ORDER BY sequence DESC
             LIMIT 1
-        """.trimIndent(), topic.name)
+        """.trimIndent(), topic.name
+        )
             .map { it.long("sequence") }
             .asSingle
 
         return tx.run(query) ?: 0L
     }
 
-
-    context(tx: Session)
+    context(tx: TransactionalSession, _: DbLockAcquired)
     fun insertRecord(
         topic: Topic,
         identity: ServiceIdentity,
         request: PublishRequest,
-        sequence: Long,
-    ): PublishResponse? {
+        sequence: Long = currentHeadForTopic(topic) + 1,
+    ): Result<PublishResponse> {
         @Language("SQL")
         val sql = """
             INSERT INTO records (
@@ -92,7 +97,7 @@ object RecordsRepository {
             "producer_identity" to identity.value,
             "record_key" to request.recordKey,
             "idempotency_key" to request.idempotencyKey,
-            "correlation_id" to request.correlationId,
+            "correlation_id" to request.correlationId.toJavaUuid(),
             "payload" to request.payload,
         )
 
@@ -109,6 +114,8 @@ object RecordsRepository {
             }
             .asSingle
 
-        return tx.run(query)
+
+        return runCatching { tx.run(query) }
+            .mapCatching { requireNotNull(it) }
     }
 }

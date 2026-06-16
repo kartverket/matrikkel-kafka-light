@@ -11,7 +11,6 @@ import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
 import no.kartverket.matrikkel.broker.service.records.Records
-import no.kartverket.matrikkel.broker.utils.SealedResult
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 
 fun Route.topicRoutes(
@@ -31,7 +30,6 @@ fun Route.topicRoutes(
                         request.payload == null && !topic.tombstonesAllowed -> badRequest("tombstone_not_allow", "Payload cannot be null")
                         request.recordKey.isBlank() -> badRequest("invalid_request", "recordKey cannot be blank")
                         request.idempotencyKey.isBlank() -> badRequest("invalid_request", "idempotencyKey cannot be blank")
-                        request.correlationId.isBlank() -> badRequest("invalid_request", "correlationId cannot be blank")
                         else -> {
                             recordsService.publish(
                                 topic = topic,
@@ -85,11 +83,10 @@ fun Route.topicRoutes(
         }
     }
 }
-private suspend fun <T : Any> ApplicationCall.respondResult(result: SealedResult<T>) {
-    when (result) {
-        is SealedResult.Success<*> -> respond(result.value)
-        is SealedResult.Failure -> throw result.error
-    }
+private suspend inline fun <reified T : Any> ApplicationCall.respondResult(result: Result<T>) {
+    result
+        .onSuccess { respond(it) }
+        .onFailure { throw it }
 }
 
 context(topicCatalog: TopicCatalog)
@@ -115,10 +112,9 @@ private fun ApplicationCall.serviceIdentity(): ServiceIdentity {
 private fun forbidden(
     code: String = "forbidden",
     message: String = "Service identity not authorized to execute command on this topic"
-) = ServiceException
-    .forbidden(code = code, message = message)
-    .asSealedResult()
+) = Result.failure<Nothing>(ServiceException.forbidden(code = code, message = message))
 
-private fun badRequest(code: String, message: String) = ServiceException
-    .badRequest(code = code, message = message)
-    .asSealedResult()
+private fun badRequest(
+    code: String,
+    message: String
+) = Result.failure<Nothing>(ServiceException.badRequest(code = code, message = message))

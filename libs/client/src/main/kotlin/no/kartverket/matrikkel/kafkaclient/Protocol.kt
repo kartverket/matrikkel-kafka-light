@@ -2,6 +2,7 @@ package no.kartverket.matrikkel.kafkaclient
 
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 /**
  * Represents a request/responses going over-the-wire between the clients and the broker
@@ -14,7 +15,7 @@ import kotlin.time.Instant
 data class PublishRequest(
     val recordKey: String,
     val idempotencyKey: String,
-    val correlationId: String,
+    val correlationId: Uuid,
     val payload: ByteArray?,
 )
 
@@ -24,7 +25,7 @@ data class PublishResponse(
     val sequence: Long,
     val recordKey: String,
     val idempotencyKey: String,
-    val correlationId: String,
+    val correlationId: Uuid,
     val publishedAt: Instant,
 )
 

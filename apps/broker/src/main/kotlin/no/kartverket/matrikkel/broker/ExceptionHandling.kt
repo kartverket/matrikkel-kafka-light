@@ -5,9 +5,11 @@ import io.ktor.server.plugins.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.response.*
 import kotlinx.serialization.Serializable
-import no.kartverket.matrikkel.broker.utils.SealedResult
+import org.slf4j.LoggerFactory
 
 fun StatusPagesConfig.configureExceptionHandling() {
+    val logger = LoggerFactory.getLogger("kafka_light")
+
     exception<ServiceException> { call, cause ->
         call.respond(cause.status, ErrorResponse(cause.code, cause.message))
     }
@@ -26,7 +28,8 @@ fun StatusPagesConfig.configureExceptionHandling() {
         )
     }
 
-    exception<Throwable> { call, _ ->
+    exception<Throwable> { call, cause ->
+        logger.error("An internal error occured", cause)
         call.respond(
             HttpStatusCode.InternalServerError,
             ErrorResponse("internal_error", "An internal error occurred"),
@@ -73,6 +76,4 @@ class ServiceException(
             message = message
         )
     }
-
-    fun asSealedResult() =  SealedResult.Failure(this)
 }
