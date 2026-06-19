@@ -5,8 +5,11 @@ import io.ktor.server.plugins.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.response.*
 import kotlinx.serialization.Serializable
+import org.slf4j.LoggerFactory
 
 fun StatusPagesConfig.configureExceptionHandling() {
+    val logger = LoggerFactory.getLogger("kafka_light")
+
     exception<ServiceException> { call, cause ->
         call.respond(cause.status, ErrorResponse(cause.code, cause.message))
     }
@@ -25,7 +28,8 @@ fun StatusPagesConfig.configureExceptionHandling() {
         )
     }
 
-    exception<Throwable> { call, _ ->
+    exception<Throwable> { call, cause ->
+        logger.error("An internal error occured", cause)
         call.respond(
             HttpStatusCode.InternalServerError,
             ErrorResponse("internal_error", "An internal error occurred"),
@@ -45,14 +49,29 @@ class ServiceException(
     override val message: String
 ) : RuntimeException(message) {
     companion object {
-        fun badRequest(code: String, message: String) = ServiceException(
+        fun badRequest(
+            code: String = "bad_request",
+            message: String
+        ) = ServiceException(
             status = HttpStatusCode.BadRequest,
             code = code,
             message = message
         )
 
-        fun unauthorized(code: String, message: String) = ServiceException(
+        fun unauthorized(
+            code: String = "uauthorized",
+            message: String
+        ) = ServiceException(
             status = HttpStatusCode.Unauthorized,
+            code = code,
+            message = message
+        )
+
+        fun forbidden(
+            code: String = "forbidden",
+            message: String
+        ) = ServiceException(
+            status = HttpStatusCode.Forbidden,
             code = code,
             message = message
         )
