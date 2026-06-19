@@ -1,5 +1,6 @@
 package no.kartverket.matrikkel.broker.api
 
+import io.ktor.http.HttpHeaders
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -12,6 +13,7 @@ import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
 import no.kartverket.matrikkel.broker.service.records.Records
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
+import kotlin.uuid.Uuid
 
 fun Route.topicRoutes(
     topicCatalog: TopicCatalog,
@@ -23,17 +25,23 @@ fun Route.topicRoutes(
                 val topic = call.topicParam()
                 val identity = call.serviceIdentity()
                 val request = call.receive<PublishRequest>()
+                val correlationId = Uuid.parseOrNull(call.request.headers[HttpHeaders.XCorrelationId] ?: "")
 
                 call.respondResult(
                     when {
                         !topic.acl.canPublish(identity) -> forbidden()
-                        request.payload == null && !topic.tombstonesAllowed -> badRequest("tombstone_not_allow", "Payload cannot be null")
-                        request.recordKey.isBlank() -> badRequest("invalid_request", "recordKey cannot be blank")
+                        correlationId == null -> badRequest("invalid_request", "Missing or invalid ${HttpHeaders.XCorrelationId} header")
                         request.idempotencyKey.isBlank() -> badRequest("invalid_request", "idempotencyKey cannot be blank")
+                        request.records.size !in 1.. 1000 -> badRequest("invalid_request", "number of records must be in range 1..1000")
+                        !topic.tombstonesAllowed && request.records.any { it.payload == null } -> badRequest("tombstone_not_allow", "Payload cannot be null")
+                        request.records.any { it.recordKey.isBlank() } -> badRequest("invalid_request", "recordKey cannot be blank")
                         else -> {
                             recordsService.publish(
-                                topic = topic,
-                                identity = identity,
+                                ctx = Records.Service.Ctx(
+                                    topic = topic,
+                                    identity = identity,
+                                    correlationId = correlationId,
+                                ),
                                 request = request,
                             )
                         }
@@ -44,8 +52,11 @@ fun Route.topicRoutes(
             post("poll") {
                 call.respondResult(
                     recordsService.poll(
-                        topic = call.topicParam(),
-                        identity = call.serviceIdentity(),
+                        ctx = Records.Service.Ctx(
+                            topic = call.topicParam(),
+                            identity = call.serviceIdentity(),
+                            correlationId = Uuid.parse("")
+                        ),
                         request = call.receive(),
                     )
                 )
@@ -54,8 +65,11 @@ fun Route.topicRoutes(
             post("commit") {
                 call.respondResult(
                     recordsService.commit(
-                        topic = call.topicParam(),
-                        identity = call.serviceIdentity(),
+                        ctx = Records.Service.Ctx(
+                            topic = call.topicParam(),
+                            identity = call.serviceIdentity(),
+                            correlationId = Uuid.parse("")
+                        ),
                         request = call.receive(),
                     )
                 )
@@ -64,8 +78,11 @@ fun Route.topicRoutes(
             post("seek") {
                 call.respondResult(
                     recordsService.seek(
-                        topic = call.topicParam(),
-                        identity = call.serviceIdentity(),
+                        ctx = Records.Service.Ctx(
+                            topic = call.topicParam(),
+                            identity = call.serviceIdentity(),
+                            correlationId = Uuid.parse("")
+                        ),
                         request = call.receive(),
                     )
                 )
@@ -74,8 +91,11 @@ fun Route.topicRoutes(
             post("heartbeat") {
                 call.respondResult(
                     recordsService.heartbeat(
-                        topic = call.topicParam(),
-                        identity = call.serviceIdentity(),
+                        ctx = Records.Service.Ctx(
+                            topic = call.topicParam(),
+                            identity = call.serviceIdentity(),
+                            correlationId = Uuid.parse("")
+                        ),
                         request = call.receive(),
                     )
                 )

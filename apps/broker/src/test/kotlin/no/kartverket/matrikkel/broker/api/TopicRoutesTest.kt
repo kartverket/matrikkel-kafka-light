@@ -23,6 +23,7 @@ import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
 import no.kartverket.matrikkel.broker.service.records.Records
 import no.kartverket.matrikkel.broker.standardPlugins
+import no.kartverket.matrikkel.kafkaclient.PublishRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
 import org.junit.jupiter.api.Test
@@ -54,7 +55,13 @@ class TopicRoutesTest {
         )
     )
     val request = PublishRequest(
-        recordKey = "record_key", idempotencyKey = "idempotency_key", correlationId = Uuid.random(), payload = "payload".toByteArray()
+        idempotencyKey = "idempotency_key",
+        records = listOf(
+            PublishRecord(
+                recordKey = "record_key",
+                payload = "payload".toByteArray(),
+            )
+        )
     )
 
 
@@ -62,6 +69,7 @@ class TopicRoutesTest {
     fun `should return error for missing topic`() {
         topicRouteTest { client, _ ->
             val response = client.post("/topics/missing-topic/publish") {
+                header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
                 setBody(request)
             }
@@ -75,6 +83,7 @@ class TopicRoutesTest {
     fun `should return error for missing service identity`() {
         topicRouteTest(disableAuth = true) { client, _ ->
             val response = client.post("/topics/test-topic/publish") {
+                header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
                 setBody(request)
             }
@@ -85,9 +94,23 @@ class TopicRoutesTest {
     }
 
     @Test
+    fun `should return error for missing correlationId header`() {
+        topicRouteTest { client, _ ->
+            val response = client.post("/topics/test-topic/publish") {
+                header(HttpHeaders.ContentType, ContentType.Application.Json)
+                setBody(request)
+            }
+
+            val result = response.body<ErrorResponse>()
+            assertThat(result.code).isEqualTo("invalid_request")
+        }
+    }
+
+    @Test
     fun `should return forbidding if ACL denies access`() {
         topicRouteTest { client, _ ->
             val response = client.post("/topics/locked-topic/publish") {
+                header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
                 setBody(request)
             }
@@ -101,8 +124,11 @@ class TopicRoutesTest {
     fun `should return bad_request if record_key is invalid`() {
         topicRouteTest { client, _ ->
             val response = client.post("/topics/test-topic/publish") {
+                header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
-                setBody(request.copy(recordKey = ""))
+                setBody(request.copy(
+                    records = request.records.map { it.copy(recordKey = "") }
+                ))
             }
 
             val result = response.body<ErrorResponse>()
@@ -114,6 +140,7 @@ class TopicRoutesTest {
     fun `should return bad_request if idempotency_key is invalid`() {
         topicRouteTest { client, _ ->
             val response = client.post("/topics/test-topic/publish") {
+                header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
                 setBody(request.copy(idempotencyKey = ""))
             }
@@ -126,20 +153,19 @@ class TopicRoutesTest {
     @Test
     fun `should return success response from service`() {
         topicRouteTest { client, mockService ->
-            val correlationId = Uuid.random()
-            coEvery { mockService.publish(any(), any(), any()) } returns
+            coEvery { mockService.publish(any(), any()) } returns
                     Result.success(
                         PublishResponse(
                             topic = topicCatalog.topics.first().name,
                             sequence = 123L,
                             recordKey = "record_key",
                             idempotencyKey = "idempotency_key",
-                            correlationId = correlationId,
                             publishedAt = Clock.System.now(),
                         )
                     )
 
             val response = client.post("/topics/test-topic/publish") {
+                header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
                 setBody(request)
             }
@@ -150,7 +176,6 @@ class TopicRoutesTest {
                 prop(PublishResponse::sequence).isEqualTo(123L)
                 prop(PublishResponse::recordKey).isEqualTo("record_key")
                 prop(PublishResponse::idempotencyKey).isEqualTo("idempotency_key")
-                prop(PublishResponse::correlationId).isEqualTo(correlationId)
             }
         }
     }
@@ -158,10 +183,11 @@ class TopicRoutesTest {
     @Test
     fun `should return error response from service`() {
         topicRouteTest { client, mockService ->
-            coEvery { mockService.publish(any(), any(), any()) } returns
+            coEvery { mockService.publish(any(), any()) } returns
                     Result.failure(Exception("Something went wrong"))
 
             val response = client.post("/topics/test-topic/publish") {
+                header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
                 setBody(request)
             }

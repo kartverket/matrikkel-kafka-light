@@ -9,9 +9,10 @@ import no.kartverket.matrikkel.broker.repository.DbMutex.DbLockAcquired
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
 import org.intellij.lang.annotations.Language
+import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
+import kotlin.uuid.Uuid
 import kotlin.uuid.toJavaUuid
-import kotlin.uuid.toKotlinUuid
 
 object RecordsRepository {
     context(tx: Session)
@@ -19,14 +20,15 @@ object RecordsRepository {
         topic: Topic,
         identity: ServiceIdentity,
         idempotencyKey: String,
+        recordKey: String,
     ): PublishResponse? {
         @Language("SQL")
         val query = queryOf(
             """
-            SELECT sequence, record_key, correlation_id, published_at
+            SELECT sequence, record_key, published_at
             FROM records
-            WHERE topic = ? AND producer_identity = ? AND idempotency_key = ? 
-        """.trimIndent(), topic.name, identity.value, idempotencyKey
+            WHERE topic = ? AND producer_identity = ? AND idempotency_key = ? AND record_key = ?
+        """.trimIndent(), topic.name, identity.value, idempotencyKey, recordKey
         )
             .map {
                 PublishResponse(
@@ -34,7 +36,6 @@ object RecordsRepository {
                     sequence = it.long("sequence"),
                     recordKey = it.string("record_key"),
                     idempotencyKey = idempotencyKey,
-                    correlationId = it.uuid("correlation_id").toKotlinUuid(),
                     publishedAt = it.instant("published_at").toKotlinInstant()
                 )
             }
@@ -61,11 +62,12 @@ object RecordsRepository {
     }
 
     context(tx: TransactionalSession, _: DbLockAcquired)
-    fun insertRecord(
+    fun insertRecords(
         topic: Topic,
         identity: ServiceIdentity,
+        correlationId: Uuid,
         request: PublishRequest,
-        sequence: Long = currentHeadForTopic(topic) + 1,
+        initialSequence: Long = currentHeadForTopic(topic) + 1,
     ): Result<PublishResponse> {
         @Language("SQL")
         val sql = """
@@ -87,35 +89,43 @@ object RecordsRepository {
                 :correlation_id,
                 :payload,
                 NOW()
-            ) ON CONFLICT (producer_identity, topic, idempotency_key) DO NOTHING
-            RETURNING sequence, published_at
+            ) ON CONFLICT (topic, record_key, producer_identity, idempotency_key) DO NOTHING
         """.trimIndent()
 
-        val params = mapOf(
-            "topic" to topic.name,
-            "sequence" to sequence,
-            "producer_identity" to identity.value,
-            "record_key" to request.recordKey,
-            "idempotency_key" to request.idempotencyKey,
-            "correlation_id" to request.correlationId.toJavaUuid(),
-            "payload" to request.payload,
-        )
-
-        val query = queryOf(sql, params)
-            .map {
-                PublishResponse(
-                    topic = topic.name,
-                    sequence = it.long("sequence"),
-                    recordKey = request.recordKey,
-                    idempotencyKey = request.idempotencyKey,
-                    correlationId = request.correlationId,
-                    publishedAt = it.instant("published_at").toKotlinInstant()
-                )
-            }
-            .asSingle
+        val lastRecord = request.records.last()
+        var sequence = initialSequence
+        val params = request.records.map { record ->
+            mapOf(
+                "topic" to topic.name,
+                "sequence" to sequence++,
+                "producer_identity" to identity.value,
+                "record_key" to record.recordKey,
+                "idempotency_key" to request.idempotencyKey,
+                "correlation_id" to correlationId.toJavaUuid(),
+                "payload" to record.payload,
+            )
+        }
 
 
-        return runCatching { tx.run(query) }
-            .mapCatching { requireNotNull(it) }
+        return runCatching {
+            val dbNow: Instant = requireNotNull(
+                tx.single(queryOf("SELECT now()")) {
+                    it.instant(1).toKotlinInstant()
+                }
+            )
+            val result = tx.batchPreparedNamedStatement(
+                sql,
+                params,
+            )
+            require(result.sum() == request.records.size)
+
+            PublishResponse(
+                topic = topic.name,
+                sequence = sequence - 1,
+                recordKey = lastRecord.recordKey,
+                idempotencyKey = request.idempotencyKey,
+                publishedAt = dbNow,
+            )
+        }
     }
 }

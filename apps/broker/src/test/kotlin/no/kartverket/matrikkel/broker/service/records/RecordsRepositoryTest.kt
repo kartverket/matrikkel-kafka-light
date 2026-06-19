@@ -2,12 +2,7 @@ package no.kartverket.no.kartverket.matrikkel.broker.service.records
 
 import assertk.all
 import assertk.assertThat
-import assertk.assertions.isEqualTo
-import assertk.assertions.isFailure
-import assertk.assertions.isNotNull
-import assertk.assertions.isNull
-import assertk.assertions.isSuccess
-import assertk.assertions.prop
+import assertk.assertions.*
 import kotlinx.coroutines.runBlocking
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
@@ -18,6 +13,7 @@ import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.currentHeadForTopic
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.findExistingPublishedRecord
+import no.kartverket.matrikkel.kafkaclient.PublishRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
@@ -27,7 +23,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 class RecordsRepositoryTest : WithDatabase {
-    val TestLock : DbMutex.LockScope = object : DbMutex.LockScope {
+    val TestLock: DbMutex.LockScope = object : DbMutex.LockScope {
         override val seed: Long = 123L
     }
     val topic = Topic(
@@ -38,12 +34,12 @@ class RecordsRepositoryTest : WithDatabase {
         )
     )
     val identity = ServiceIdentity("fake-user")
-    val request = PublishRequest(
+    val idempotencyKey = "idempotency_key"
+    val record = PublishRecord(
         recordKey = "record_key",
-        idempotencyKey = "idempotency_key",
-        correlationId = Uuid.random(),
-        payload = "custom payload".toByteArray()
+        payload = "custom payload".toByteArray(),
     )
+
 
     @Test
     fun `should return zero for current head for empty topic`(): Unit = runBlocking {
@@ -59,7 +55,15 @@ class RecordsRepositoryTest : WithDatabase {
         val currentHead: Long = dataSource().withTransaction {
             DbMutex.withLock(TestLock, topic.name) {
                 repeat(10) { no ->
-                    RecordsRepository.insertRecord(topic, identity, request.copy(idempotencyKey = request.idempotencyKey + no))
+                    RecordsRepository.insertRecords(
+                        topic = topic,
+                        identity = identity,
+                        correlationId = Uuid.random(),
+                        request = PublishRequest(
+                            idempotencyKey = idempotencyKey + no,
+                            records = listOf(record),
+                        ),
+                    )
                 }
             }
             currentHeadForTopic(topic)
@@ -71,7 +75,7 @@ class RecordsRepositoryTest : WithDatabase {
     @Test
     fun `should return null if no previous equal message is published`(): Unit = runBlocking {
         val existingRecord: PublishResponse? = dataSource().withSession {
-            findExistingPublishedRecord(topic, identity, request.idempotencyKey)
+            findExistingPublishedRecord(topic, identity, idempotencyKey, "random")
         }
 
         assertThat(existingRecord).isNull()
@@ -81,16 +85,23 @@ class RecordsRepositoryTest : WithDatabase {
     fun `should return published record on insert`(): Unit = runBlocking {
         val insertedRow = dataSource().withTransaction {
             DbMutex.withLock(TestLock, topic.name) {
-                RecordsRepository.insertRecord(topic, identity, request)
+                RecordsRepository.insertRecords(
+                    topic = topic,
+                    identity = identity,
+                    correlationId = Uuid.random(),
+                    request = PublishRequest(
+                        idempotencyKey = idempotencyKey,
+                        records = listOf(record),
+                    ),
+                )
             }
         }
 
         assertThat(insertedRow).isSuccess().isNotNull().all {
             prop(PublishResponse::topic).isEqualTo(topic.name)
             prop(PublishResponse::sequence).isEqualTo(1)
-            prop(PublishResponse::recordKey).isEqualTo(request.recordKey)
-            prop(PublishResponse::idempotencyKey).isEqualTo(request.idempotencyKey)
-            prop(PublishResponse::correlationId).isEqualTo(request.correlationId)
+            prop(PublishResponse::recordKey).isEqualTo(record.recordKey)
+            prop(PublishResponse::idempotencyKey).isEqualTo(idempotencyKey)
             prop(PublishResponse::publishedAt).isApproxNow(1.seconds)
         }
     }
@@ -99,13 +110,22 @@ class RecordsRepositoryTest : WithDatabase {
     fun `should return failure on duplicate insert`(): Unit = runBlocking {
         dataSource().withTransaction {
             DbMutex.withLock(TestLock, topic.name) {
-                RecordsRepository.insertRecord(topic, identity, request)
+                RecordsRepository.insertRecords(
+                    topic, identity, Uuid.random(), PublishRequest(
+                        idempotencyKey = idempotencyKey,
+                        records = listOf(record),
+                    )
+                )
             }
         }
 
         val insertedRow = dataSource().withTransaction {
             DbMutex.withLock(TestLock, topic.name) {
-                RecordsRepository.insertRecord(topic, identity, request)
+                RecordsRepository.insertRecords(topic, identity, Uuid.random(), PublishRequest(
+                    idempotencyKey = idempotencyKey,
+                    records = listOf(record),
+                )
+                )
             }
         }
 
@@ -116,20 +136,23 @@ class RecordsRepositoryTest : WithDatabase {
     fun `should return existing record`(): Unit = runBlocking {
         dataSource().withTransaction {
             DbMutex.withLock(TestLock, topic.name) {
-                RecordsRepository.insertRecord(topic, identity, request)
+                RecordsRepository.insertRecords(topic, identity, Uuid.random(), PublishRequest(
+                    idempotencyKey = idempotencyKey,
+                    records = listOf(record),
+                )
+                )
             }
         }
 
         val existingRecord: PublishResponse? = dataSource().withSession {
-            findExistingPublishedRecord(topic, identity, request.idempotencyKey)
+            findExistingPublishedRecord(topic, identity, idempotencyKey, record.recordKey)
         }
 
         assertThat(existingRecord).isNotNull().all {
             prop(PublishResponse::topic).isEqualTo(topic.name)
             prop(PublishResponse::sequence).isEqualTo(1)
-            prop(PublishResponse::recordKey).isEqualTo(request.recordKey)
-            prop(PublishResponse::idempotencyKey).isEqualTo(request.idempotencyKey)
-            prop(PublishResponse::correlationId).isEqualTo(request.correlationId)
+            prop(PublishResponse::recordKey).isEqualTo(record.recordKey)
+            prop(PublishResponse::idempotencyKey).isEqualTo(idempotencyKey)
             prop(PublishResponse::publishedAt).isApproxNow(1.seconds)
         }
     }

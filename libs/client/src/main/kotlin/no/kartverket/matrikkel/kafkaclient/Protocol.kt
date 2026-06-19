@@ -13,9 +13,13 @@ import kotlin.uuid.Uuid
 
 @Serializable
 data class PublishRequest(
-    val recordKey: String,
     val idempotencyKey: String,
-    val correlationId: Uuid,
+    val records: List<PublishRecord>,
+)
+
+@Serializable
+data class PublishRecord(
+    val recordKey: String,
     val payload: ByteArray?,
 )
 
@@ -25,7 +29,6 @@ data class PublishResponse(
     val sequence: Long,
     val recordKey: String,
     val idempotencyKey: String,
-    val correlationId: Uuid,
     val publishedAt: Instant,
 )
 
