@@ -86,7 +86,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run tests
+      - name: Build app
         run: ./gradlew :apps:broker:installDist --no-daemon
         env:
           PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
