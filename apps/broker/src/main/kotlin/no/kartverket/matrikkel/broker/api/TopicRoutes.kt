@@ -1,5 +1,6 @@
 package no.kartverket.matrikkel.broker.api
 
+import io.ktor.http.HttpHeaders
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -10,31 +11,52 @@ import no.kartverket.matrikkel.broker.ServiceException
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
-import no.kartverket.matrikkel.broker.service.Messages
-import no.kartverket.matrikkel.broker.utils.SealedResult
+import no.kartverket.matrikkel.broker.service.records.Records
+import no.kartverket.matrikkel.kafkaclient.PublishRequest
+import kotlin.uuid.Uuid
 
 fun Route.topicRoutes(
     topicCatalog: TopicCatalog,
-    messageService: Messages.Service,
+    recordsService: Records.Service,
 ) {
     with(topicCatalog) {
         route("/topics/{topic}") {
             post("publish") {
-                // TODO VALIDATE HERE? Or in Messages.Service?
+                val topic = call.topicParam()
+                val identity = call.serviceIdentity()
+                val request = call.receive<PublishRequest>()
+                val correlationId = Uuid.parseOrNull(call.request.headers[HttpHeaders.XCorrelationId] ?: "")
+
                 call.respondResult(
-                    messageService.publish(
-                        topic = call.topicParam(),
-                        identity = call.serviceIdentity(),
-                        request = call.receive(),
-                    )
+                    when {
+                        !topic.acl.canPublish(identity) -> forbidden()
+                        correlationId == null -> badRequest("invalid_request", "Missing or invalid ${HttpHeaders.XCorrelationId} header")
+                        request.idempotencyKey.isBlank() -> badRequest("invalid_request", "idempotencyKey cannot be blank")
+                        request.records.size !in 1.. 1000 -> badRequest("invalid_request", "number of records must be in range 1..1000")
+                        !topic.tombstonesAllowed && request.records.any { it.payload == null } -> badRequest("tombstone_not_allow", "Payload cannot be null")
+                        request.records.any { it.recordKey.isBlank() } -> badRequest("invalid_request", "recordKey cannot be blank")
+                        else -> {
+                            recordsService.publish(
+                                ctx = Records.Service.Ctx(
+                                    topic = topic,
+                                    identity = identity,
+                                    correlationId = correlationId,
+                                ),
+                                request = request,
+                            )
+                        }
+                    }
                 )
             }
 
             post("poll") {
                 call.respondResult(
-                    messageService.poll(
-                        topic = call.topicParam(),
-                        identity = call.serviceIdentity(),
+                    recordsService.poll(
+                        ctx = Records.Service.Ctx(
+                            topic = call.topicParam(),
+                            identity = call.serviceIdentity(),
+                            correlationId = Uuid.parse("")
+                        ),
                         request = call.receive(),
                     )
                 )
@@ -42,9 +64,12 @@ fun Route.topicRoutes(
 
             post("commit") {
                 call.respondResult(
-                    messageService.commit(
-                        topic = call.topicParam(),
-                        identity = call.serviceIdentity(),
+                    recordsService.commit(
+                        ctx = Records.Service.Ctx(
+                            topic = call.topicParam(),
+                            identity = call.serviceIdentity(),
+                            correlationId = Uuid.parse("")
+                        ),
                         request = call.receive(),
                     )
                 )
@@ -52,9 +77,12 @@ fun Route.topicRoutes(
 
             post("seek") {
                 call.respondResult(
-                    messageService.seek(
-                        topic = call.topicParam(),
-                        identity = call.serviceIdentity(),
+                    recordsService.seek(
+                        ctx = Records.Service.Ctx(
+                            topic = call.topicParam(),
+                            identity = call.serviceIdentity(),
+                            correlationId = Uuid.parse("")
+                        ),
                         request = call.receive(),
                     )
                 )
@@ -62,9 +90,12 @@ fun Route.topicRoutes(
 
             post("heartbeat") {
                 call.respondResult(
-                    messageService.heartbeat(
-                        topic = call.topicParam(),
-                        identity = call.serviceIdentity(),
+                    recordsService.heartbeat(
+                        ctx = Records.Service.Ctx(
+                            topic = call.topicParam(),
+                            identity = call.serviceIdentity(),
+                            correlationId = Uuid.parse("")
+                        ),
                         request = call.receive(),
                     )
                 )
@@ -72,11 +103,10 @@ fun Route.topicRoutes(
         }
     }
 }
-private suspend fun <T : Any> ApplicationCall.respondResult(result: SealedResult<T>) {
-    when (result) {
-        is SealedResult.Success<*> -> respond(result.value)
-        is SealedResult.Failure<*> -> throw result.error
-    }
+private suspend inline fun <reified T : Any> ApplicationCall.respondResult(result: Result<T>) {
+    result
+        .onSuccess { respond(it) }
+        .onFailure { throw it }
 }
 
 context(topicCatalog: TopicCatalog)
@@ -98,3 +128,13 @@ private fun ApplicationCall.serviceIdentity(): ServiceIdentity {
     }
     return ServiceIdentity(subject)
 }
+
+private fun forbidden(
+    code: String = "forbidden",
+    message: String = "Service identity not authorized to execute command on this topic"
+) = Result.failure<Nothing>(ServiceException.forbidden(code = code, message = message))
+
+private fun badRequest(
+    code: String,
+    message: String
+) = Result.failure<Nothing>(ServiceException.badRequest(code = code, message = message))

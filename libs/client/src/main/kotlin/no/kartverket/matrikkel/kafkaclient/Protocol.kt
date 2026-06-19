@@ -1,6 +1,8 @@
 package no.kartverket.matrikkel.kafkaclient
 
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 /**
  * Represents a request/responses going over-the-wire between the clients and the broker
@@ -10,10 +12,25 @@ import kotlinx.serialization.Serializable
  */
 
 @Serializable
-class PublishRequest
+data class PublishRequest(
+    val idempotencyKey: String,
+    val records: List<PublishRecord>,
+)
 
 @Serializable
-class PublishResponse
+data class PublishRecord(
+    val recordKey: String,
+    val payload: ByteArray?,
+)
+
+@Serializable
+data class PublishResponse(
+    val topic: String,
+    val sequence: Long,
+    val recordKey: String,
+    val idempotencyKey: String,
+    val publishedAt: Instant,
+)
 
 @Serializable
 enum class InitialOffsetPolicy {
