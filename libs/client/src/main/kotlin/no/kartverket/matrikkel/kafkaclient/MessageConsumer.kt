@@ -22,6 +22,6 @@ data class ConsumerRecord<T>(
 interface MessageConsumer<T> : Closeable {
     suspend fun poll(maxRecords: Int): ConsumerRecords<T>
     suspend fun commitSync(sequence: Long): CommitResponse
-    suspend fun seek(sequence: Long): ResetResponse
+    suspend fun seek(sequence: Long): SeekResponse
     suspend fun heartbeat(): HeartbeatResponse
 }
