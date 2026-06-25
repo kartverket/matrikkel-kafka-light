@@ -14,6 +14,7 @@ class TopicCatalog(
     fun get(key: String): Topic = requireNotNull(topicsByKey[key]) {
         "Unknown topic: $key"
     }
+    fun getOrNull(key: String): Topic? = topicsByKey[key]
 
     fun all(): Collection<Topic> = topicsByKey.values
 }

@@ -8,16 +8,25 @@ application {
 }
 
 dependencies {
+    implementation(project(":libs:client"))
     implementation(ktorLibs.server.config.yaml)
     implementation(ktorLibs.server.core)
     implementation(ktorLibs.server.netty)
+    implementation(ktorLibs.server.statusPages)
+    implementation(ktorLibs.server.contentNegotiation)
     implementation(ktorLibs.server.auth)
     implementation(ktorLibs.server.auth.jwt)
+    implementation(ktorLibs.server.metrics.micrometer)
+    implementation(ktorLibs.server.callId)
+    implementation(ktorLibs.server.callLogging)
     implementation(ktorLibs.client.cio)
     implementation(ktorLibs.client.contentNegotiation)
     implementation(ktorLibs.serialization.kotlinx.json)
     implementation(libs.slf4j)
     implementation(libs.logback.classic)
+    implementation(libs.logstash)
+    implementation(libs.micrometerPrometheus)
+    implementation(libs.ktorUtils)
 
     implementation(libs.flyway)
     implementation(libs.flyway.postgresql)

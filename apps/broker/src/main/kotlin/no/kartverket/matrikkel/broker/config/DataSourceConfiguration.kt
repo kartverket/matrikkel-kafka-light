@@ -3,6 +3,7 @@ package no.kartverket.matrikkel.broker.config
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.configuration.FluentConfiguration
 import javax.sql.DataSource
 
 object DataSourceConfiguration {
@@ -30,12 +31,16 @@ object DataSourceConfiguration {
     }
 
     fun migrate(dataSource: DataSource) {
-        Flyway
+        flywayConfig(dataSource)
+            .load()
+            .migrate()
+    }
+
+    fun flywayConfig(dataSource: DataSource): FluentConfiguration {
+        return Flyway
             .configure()
             .dataSource(dataSource)
             .baselineOnMigrate(true)
             .baselineVersion("0")
-            .load()
-            .migrate()
     }
 }

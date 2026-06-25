@@ -2,10 +2,9 @@ package no.kartverket.no.kartverket.matrikkel.broker.testutils
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import no.kartverket.matrikkel.broker.config.Configuration
 import no.kartverket.matrikkel.broker.config.DataSourceConfiguration
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
 import org.testcontainers.containers.PostgreSQLContainer
 import javax.sql.DataSource
 
@@ -27,27 +26,21 @@ interface WithDatabase {
         )
 
 
-        @BeforeAll
-        @JvmStatic
-        fun setup(): Unit {
-            DataSourceConfiguration.migrate(dataSource)
-        }
+        fun dataSource(): DataSource = dataSource
+        fun connectionUrl(): String = postgres.jdbcUrl
+        private val flyway = DataSourceConfiguration.flywayConfig(dataSource)
+            .cleanDisabled(false)
+            .load()
+    }
+
+    @BeforeEach
+    fun `migrate db`() {
+        flyway.migrate()
     }
 
     @AfterEach
-    fun cleanupDatabase() {
-        println("Removing database data")
-        dataSource.connection.use { connection ->
-            connection.createStatement().use { stmt ->
-                stmt.execute(
-                    """
-                    truncate table topics
-                    restart identity
-                    ;
-                    """.trimIndent()
-                )
-            }
-        }
+    fun `clean db`() {
+        flyway.clean()
     }
 
     fun dataSource(): DataSource = dataSource

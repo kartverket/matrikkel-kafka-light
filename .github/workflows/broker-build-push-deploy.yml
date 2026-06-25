@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -52,6 +52,8 @@ jobs:
 
       - name: Run tests
         run: ./gradlew test --no-daemon
+        env:
+          PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   package-image:
     name: Build and (conditionally) Push Docker Image
@@ -64,7 +66,14 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -76,6 +85,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build app
+        run: ./gradlew :apps:broker:installDist --no-daemon
+        env:
+          PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build Docker image
         uses: docker/build-push-action@v7
         env:
@@ -108,7 +123,7 @@ jobs:
       security-events: write
     steps:
       - name: "Run Pharos"
-        uses: kartverket/pharos@599d3fe4af8bae19fbfda831662e90ee1c406ec2 # v0.6.3
+        uses: kartverket/pharos@e5a5cf71dd41384d6d62c7d9b387851c0457e81b # v0.6.4
         with:
           image_url: ${{ needs.version.outputs.image }}
           trivy: true
