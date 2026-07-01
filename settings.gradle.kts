@@ -20,7 +20,7 @@ dependencyResolutionManagement {
         }
     }
     versionCatalogs {
-        create("ktorLibs").from("io.ktor:ktor-version-catalog:3.5.0")
+        create("ktorLibs").from("io.ktor:ktor-version-catalog:3.5.1")
     }
 }
 
@@ -29,3 +29,4 @@ plugins {
 }
 
 include(":apps:broker")
+include(":libs:client")

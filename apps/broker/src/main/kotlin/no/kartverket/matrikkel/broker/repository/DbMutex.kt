@@ -1,14 +1,15 @@
 package no.kartverket.matrikkel.broker.repository
 
-import kotliquery.Session
+import kotliquery.TransactionalSession
 import kotliquery.queryOf
 
 object DbMutex {
     interface LockScope {
         val seed: Long
     }
+    class DbLockAcquired internal constructor()
 
-    context(session: Session)
+    context(tx: TransactionalSession)
     fun lock(scope: LockScope, name: String) {
         val query = queryOf(
             "select pg_advisory_xact_lock(hashtextextended(:name, :seed))",
@@ -18,6 +19,14 @@ object DbMutex {
             )
         ).asExecute
 
-        session.run(query)
+        tx.run(query)
+    }
+
+    context(tx: TransactionalSession)
+    fun <T> withLock(scope: LockScope, name: String, block: context(DbLockAcquired) () -> T): T {
+        lock(scope, name)
+        return with(DbLockAcquired()) {
+            block()
+        }
     }
 }
