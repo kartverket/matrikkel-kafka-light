@@ -42,7 +42,7 @@ class RecordsServiceTest : WithDatabase {
         idempotencyKey = "idempotency_key",
         records = listOf(
             PublishRecord(
-                recordKey = "record_key",
+                recordKey = "record_key".toByteArray(),
                 payload = "custom payload".toByteArray()
             )
         ),
@@ -76,7 +76,6 @@ class RecordsServiceTest : WithDatabase {
             assertThat(it).all {
                 prop(PublishResponse::topic).isEqualTo(topic.name)
                 prop(PublishResponse::sequence).isEqualTo(1)
-                prop(PublishResponse::recordKey).isEqualTo(request.records.last().recordKey)
                 prop(PublishResponse::idempotencyKey).isEqualTo(request.idempotencyKey)
                 prop(PublishResponse::publishedAt).isApproxNow(1.seconds)
             }
@@ -88,7 +87,7 @@ class RecordsServiceTest : WithDatabase {
         val service = Records.ServiceImpl(dataSource())
         val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
         val invalidRequest = request.copy(
-            records = request.records.map { it.copy(recordKey = "1234567890".repeat(30)) }
+            records = request.records.map { it.copy(recordKey = "1234567890".repeat(30).toByteArray()) }
         )
         val result = service.publish(ctx, invalidRequest)
 
@@ -117,7 +116,7 @@ class RecordsServiceTest : WithDatabase {
                                     repeat(numberOfRecordsPerPublish) {
                                         add(
                                             PublishRecord(
-                                                recordKey = "${workerId}-${recordId}",
+                                                recordKey = "${workerId}-${recordId}".toByteArray(),
                                                 payload = "${workerId}-${recordId}".toByteArray(),
                                             )
                                         )

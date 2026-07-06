@@ -9,6 +9,7 @@ heimdallCommonVersion = "1.2026.06.22-10.39-385bd25"
 slf4j = { module = "org.slf4j:slf4j-api", version = "2.0.18" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version = "1.5.37" }
 logstash = { module = "net.logstash.logback:logstash-logback-encoder", version = "9.0" }
+kotlinCoroutinesTest = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version = "1.11.0" }
 kotlinGradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 kotlinSerializationPlugin = { module = "org.jetbrains.kotlin.plugin.serialization:org.jetbrains.kotlin.plugin.serialization.gradle.plugin", version.ref = "kotlin" }
 ktorUtils = { module = "no.kartverket.heimdall.common:ktor-utils", version.ref = "heimdallCommonVersion"}
@@ -27,6 +28,7 @@ junitParams = { module = "org.junit.jupiter:junit-jupiter-params", version.ref =
 junitPlatformLauncher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junitVersion" }
 assertk = { module = "com.willowtreeapps.assertk:assertk-jvm", version = "0.28.1" }
 mockk = { module = "io.mockk:mockk", version = "1.14.11" }
+mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version = "5.4.0" }
 
 testcontainers-postgres = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
 testcontainers-junit = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
@@ -41,7 +43,9 @@ testEcosystem = [
     "mockk",
     "testcontainers-postgres",
     "testcontainers-junit",
-    "junitPlatformLauncher"
+    "junitPlatformLauncher",
+    "mockwebserver",
+    "kotlinCoroutinesTest",
 ]
 
 [plugins]

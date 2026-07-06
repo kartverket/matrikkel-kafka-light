@@ -36,7 +36,7 @@ class RecordsRepositoryTest : WithDatabase {
     val identity = ServiceIdentity("fake-user")
     val idempotencyKey = "idempotency_key"
     val record = PublishRecord(
-        recordKey = "record_key",
+        recordKey = "record_key".toByteArray(),
         payload = "custom payload".toByteArray(),
     )
 
@@ -75,7 +75,7 @@ class RecordsRepositoryTest : WithDatabase {
     @Test
     fun `should return null if no previous equal message is published`(): Unit = runBlocking {
         val existingRecord: PublishResponse? = dataSource().withSession {
-            findExistingPublishedRecord(topic, identity, idempotencyKey, "random")
+            findExistingPublishedRecord(topic, identity, idempotencyKey, "random".toByteArray())
         }
 
         assertThat(existingRecord).isNull()
@@ -100,7 +100,6 @@ class RecordsRepositoryTest : WithDatabase {
         assertThat(insertedRow).isSuccess().isNotNull().all {
             prop(PublishResponse::topic).isEqualTo(topic.name)
             prop(PublishResponse::sequence).isEqualTo(1)
-            prop(PublishResponse::recordKey).isEqualTo(record.recordKey)
             prop(PublishResponse::idempotencyKey).isEqualTo(idempotencyKey)
             prop(PublishResponse::publishedAt).isApproxNow(1.seconds)
         }
@@ -151,7 +150,6 @@ class RecordsRepositoryTest : WithDatabase {
         assertThat(existingRecord).isNotNull().all {
             prop(PublishResponse::topic).isEqualTo(topic.name)
             prop(PublishResponse::sequence).isEqualTo(1)
-            prop(PublishResponse::recordKey).isEqualTo(record.recordKey)
             prop(PublishResponse::idempotencyKey).isEqualTo(idempotencyKey)
             prop(PublishResponse::publishedAt).isApproxNow(1.seconds)
         }

@@ -19,7 +19,7 @@ data class PublishRequest(
 
 @Serializable
 data class PublishRecord(
-    val recordKey: String,
+    val recordKey: ByteArray,
     val payload: ByteArray?,
 )
 
@@ -27,7 +27,6 @@ data class PublishRecord(
 data class PublishResponse(
     val topic: String,
     val sequence: Long,
-    val recordKey: String,
     val idempotencyKey: String,
     val publishedAt: Instant,
 )
