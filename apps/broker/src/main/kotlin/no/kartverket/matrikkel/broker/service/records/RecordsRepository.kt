@@ -20,7 +20,7 @@ object RecordsRepository {
         topic: Topic,
         identity: ServiceIdentity,
         idempotencyKey: String,
-        recordKey: String,
+        recordKey: ByteArray,
     ): PublishResponse? {
         @Language("SQL")
         val query = queryOf(
@@ -34,7 +34,6 @@ object RecordsRepository {
                 PublishResponse(
                     topic = topic.name,
                     sequence = it.long("sequence"),
-                    recordKey = it.string("record_key"),
                     idempotencyKey = idempotencyKey,
                     publishedAt = it.instant("published_at").toKotlinInstant()
                 )
@@ -122,7 +121,6 @@ object RecordsRepository {
             PublishResponse(
                 topic = topic.name,
                 sequence = sequence - 1,
-                recordKey = lastRecord.recordKey,
                 idempotencyKey = request.idempotencyKey,
                 publishedAt = dbNow,
             )

@@ -10,11 +10,12 @@ import io.ktor.client.call.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
+import io.ktor.serialization.kotlinx.cbor.cbor
 import io.ktor.server.auth.*
 import io.ktor.server.testing.*
 import io.mockk.coEvery
 import io.mockk.mockk
+import kotlinx.serialization.cbor.Cbor
 import no.kartverket.heimdall.common.ktor.plugins.security.Security
 import no.kartverket.matrikkel.broker.ErrorResponse
 import no.kartverket.matrikkel.broker.api.topicRoutes
@@ -23,9 +24,11 @@ import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
 import no.kartverket.matrikkel.broker.service.records.Records
 import no.kartverket.matrikkel.broker.standardPlugins
+import no.kartverket.matrikkel.kafkaclient.MessageProducer
 import no.kartverket.matrikkel.kafkaclient.PublishRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
+import no.kartverket.matrikkel.kafkaclient.StringSerde
 import org.junit.jupiter.api.Test
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -58,7 +61,7 @@ class TopicRoutesTest {
         idempotencyKey = "idempotency_key",
         records = listOf(
             PublishRecord(
-                recordKey = "record_key",
+                recordKey = "record_key".toByteArray(),
                 payload = "payload".toByteArray(),
             )
         )
@@ -70,7 +73,7 @@ class TopicRoutesTest {
         topicRouteTest { client, _ ->
             val response = client.post("/topics/missing-topic/publish") {
                 header(HttpHeaders.XCorrelationId, Uuid.random().toString())
-                header(HttpHeaders.ContentType, ContentType.Application.Json)
+                header(HttpHeaders.ContentType, ContentType.Application.Cbor)
                 setBody(request)
             }
 
@@ -84,7 +87,7 @@ class TopicRoutesTest {
         topicRouteTest(disableAuth = true) { client, _ ->
             val response = client.post("/topics/test-topic/publish") {
                 header(HttpHeaders.XCorrelationId, Uuid.random().toString())
-                header(HttpHeaders.ContentType, ContentType.Application.Json)
+                header(HttpHeaders.ContentType, ContentType.Application.Cbor)
                 setBody(request)
             }
 
@@ -97,7 +100,7 @@ class TopicRoutesTest {
     fun `should return error for missing correlationId header`() {
         topicRouteTest { client, _ ->
             val response = client.post("/topics/test-topic/publish") {
-                header(HttpHeaders.ContentType, ContentType.Application.Json)
+                header(HttpHeaders.ContentType, ContentType.Application.Cbor)
                 setBody(request)
             }
 
@@ -111,7 +114,7 @@ class TopicRoutesTest {
         topicRouteTest { client, _ ->
             val response = client.post("/topics/locked-topic/publish") {
                 header(HttpHeaders.XCorrelationId, Uuid.random().toString())
-                header(HttpHeaders.ContentType, ContentType.Application.Json)
+                header(HttpHeaders.ContentType, ContentType.Application.Cbor)
                 setBody(request)
             }
 
@@ -125,9 +128,9 @@ class TopicRoutesTest {
         topicRouteTest { client, _ ->
             val response = client.post("/topics/test-topic/publish") {
                 header(HttpHeaders.XCorrelationId, Uuid.random().toString())
-                header(HttpHeaders.ContentType, ContentType.Application.Json)
+                header(HttpHeaders.ContentType, ContentType.Application.Cbor)
                 setBody(request.copy(
-                    records = request.records.map { it.copy(recordKey = "") }
+                    records = request.records.map { it.copy(recordKey = "".toByteArray()) }
                 ))
             }
 
@@ -141,7 +144,7 @@ class TopicRoutesTest {
         topicRouteTest { client, _ ->
             val response = client.post("/topics/test-topic/publish") {
                 header(HttpHeaders.XCorrelationId, Uuid.random().toString())
-                header(HttpHeaders.ContentType, ContentType.Application.Json)
+                header(HttpHeaders.ContentType, ContentType.Application.Cbor)
                 setBody(request.copy(idempotencyKey = ""))
             }
 
@@ -158,7 +161,6 @@ class TopicRoutesTest {
                         PublishResponse(
                             topic = topicCatalog.topics.first().name,
                             sequence = 123L,
-                            recordKey = "record_key",
                             idempotencyKey = "idempotency_key",
                             publishedAt = Clock.System.now(),
                         )
@@ -166,7 +168,7 @@ class TopicRoutesTest {
 
             val response = client.post("/topics/test-topic/publish") {
                 header(HttpHeaders.XCorrelationId, Uuid.random().toString())
-                header(HttpHeaders.ContentType, ContentType.Application.Json)
+                header(HttpHeaders.ContentType, ContentType.Application.Cbor)
                 setBody(request)
             }
 
@@ -174,7 +176,6 @@ class TopicRoutesTest {
             assertThat(result).isNotNull().all {
                 prop(PublishResponse::topic).isEqualTo("test-topic")
                 prop(PublishResponse::sequence).isEqualTo(123L)
-                prop(PublishResponse::recordKey).isEqualTo("record_key")
                 prop(PublishResponse::idempotencyKey).isEqualTo("idempotency_key")
             }
         }
@@ -188,7 +189,7 @@ class TopicRoutesTest {
 
             val response = client.post("/topics/test-topic/publish") {
                 header(HttpHeaders.XCorrelationId, Uuid.random().toString())
-                header(HttpHeaders.ContentType, ContentType.Application.Json)
+                header(HttpHeaders.ContentType, ContentType.Application.Cbor)
                 setBody(request)
             }
 
@@ -226,7 +227,12 @@ class TopicRoutesTest {
 
             client = createClient {
                 install(ContentNegotiation) {
-                    json()
+                    cbor(
+                        Cbor {
+                            ignoreUnknownKeys = true
+                            encodeDefaults = true
+                        }
+                    )
                 }
             }
 

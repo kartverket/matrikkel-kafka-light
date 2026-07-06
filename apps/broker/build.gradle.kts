@@ -21,7 +21,7 @@ dependencies {
     implementation(ktorLibs.server.callLogging)
     implementation(ktorLibs.client.cio)
     implementation(ktorLibs.client.contentNegotiation)
-    implementation(ktorLibs.serialization.kotlinx.json)
+    implementation(ktorLibs.serialization.kotlinx.cbor)
     implementation(libs.slf4j)
     implementation(libs.logback.classic)
     implementation(libs.logstash)

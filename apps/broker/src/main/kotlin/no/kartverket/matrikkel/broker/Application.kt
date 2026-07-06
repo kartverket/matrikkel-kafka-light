@@ -1,7 +1,7 @@
 package no.kartverket.matrikkel.broker
 
 import io.ktor.http.HttpHeaders
-import io.ktor.serialization.kotlinx.json.json
+import io.ktor.serialization.kotlinx.cbor.cbor
 import io.ktor.server.application.*
 import io.ktor.server.auth.Authentication
 import io.ktor.server.auth.authenticate
@@ -16,7 +16,7 @@ import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.header
 import io.ktor.server.request.path
 import io.ktor.server.routing.*
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.cbor.Cbor
 import no.kartverket.heimdall.common.ktor.plugins.Metrics
 import no.kartverket.heimdall.common.ktor.plugins.selftest.Selftest
 import no.kartverket.heimdall.common.ktor.plugins.security.Security
@@ -64,8 +64,8 @@ fun runApplication(disableSecurity: Boolean = false) {
 
 fun Application.standardPlugins(version: String) {
     install(ContentNegotiation) {
-        json(
-            Json {
+        cbor(
+            Cbor {
                 ignoreUnknownKeys = true
                 encodeDefaults = true
             }
