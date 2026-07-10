@@ -7,7 +7,7 @@ heimdallCommonVersion = "1.2026.06.22-10.39-385bd25"
 
 [libraries]
 slf4j = { module = "org.slf4j:slf4j-api", version = "2.0.18" }
-logback-classic = { module = "ch.qos.logback:logback-classic", version = "1.5.37" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version = "1.5.38" }
 logstash = { module = "net.logstash.logback:logstash-logback-encoder", version = "9.0" }
 kotlinCoroutinesTest = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version = "1.11.0" }
 kotlinGradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
