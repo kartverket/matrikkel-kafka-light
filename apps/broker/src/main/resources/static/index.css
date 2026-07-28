@@ -1,0 +1,90 @@
+:root {
+    --accent-color: #c1f1e0;
+    --accent-border: #2e5a4c;
+    --margin-step: 0.125rem;
+}
+* {
+    box-sizing: border-box;
+    margin: 0;
+}
+
+html, body, .app {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+}
+
+h1 {
+    font-weight: 100;
+}
+
+table, td, th {
+    border: 1px solid;
+}
+table {
+    border-collapse: collapse;
+}
+th, td {
+    padding: 0.5rem;
+}
+
+.app {
+    display: grid;
+    grid-template-areas: "header header"
+                         "aside main"
+                         "footer footer";
+
+    grid-template-rows: 80px 1fr 40px;
+    grid-template-columns: minmax(200px, 400px) 1fr;
+}
+
+.header {
+    grid-area: header;
+    background: var(--accent-color);
+    border-bottom: var(--accent-border) 1px solid;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.aside {
+    grid-area: aside;
+    background: var(--accent-color);
+    border-right: var(--accent-border) 1px solid;
+    padding: 1rem   ;
+}
+
+.main {
+    grid-area: main;
+    padding: 1rem;
+}
+
+.footer {
+    grid-area: footer;
+    background: var(--accent-color);
+    border-top: var(--accent-border) 1px solid;
+    padding: 0.5rem 1rem;
+}
+
+.blokk-xxs {
+    margin-bottom: calc(var(--margin-step) * 1)
+}
+.blokk-xs {
+    margin-bottom: calc(var(--margin-step) * 2)
+}
+.blokk-s {
+    margin-bottom: calc(var(--margin-step) * 4)
+}
+.blokk-m {
+    margin-bottom: calc(var(--margin-step) * 8)
+}
+.blokk-l {
+    margin-bottom: calc(var(--margin-step) * 12)
+}
+.blokk-xl {
+    margin-bottom: calc(var(--margin-step) * 16)
+}
+.blokk-xxl {
+    margin-bottom: calc(var(--margin-step) * 32)
+}
