@@ -34,7 +34,7 @@ fun Route.topicRoutes(
                         request.idempotencyKey.isBlank() -> badRequest("invalid_request", "idempotencyKey cannot be blank")
                         request.records.size !in 1.. 1000 -> badRequest("invalid_request", "number of records must be in range 1..1000")
                         !topic.tombstonesAllowed && request.records.any { it.payload == null } -> badRequest("tombstone_not_allow", "Payload cannot be null")
-                        request.records.any { it.recordKey.isEmpty() } -> badRequest("invalid_request", "recordKey cannot be blank")
+                        request.records.any { it.key.isEmpty() } -> badRequest("invalid_request", "recordKey cannot be blank")
                         else -> {
                             recordsService.publish(
                                 ctx = Records.Service.Ctx(

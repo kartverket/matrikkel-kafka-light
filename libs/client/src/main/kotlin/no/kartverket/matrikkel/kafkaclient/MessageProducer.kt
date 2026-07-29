@@ -77,7 +77,7 @@ interface MessageProducer<TKey, TValue> : Closeable {
             queue.send(
                 PendingRecord(
                     PublishRecord(
-                        recordKey = config.keySerializer.serialize(record.key),
+                        key = config.keySerializer.serialize(record.key),
                         payload = record.value?.let(config.valueSerializer::serialize),
                     ),
                     callback

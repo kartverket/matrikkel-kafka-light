@@ -65,7 +65,7 @@ class MessageProducerTest {
         val body = request.responseBody<PublishRequest>()
 
         assertThat(body.records).hasSize(3)
-        assertThat(body.records[0].recordKey.decodeToString()).isEqualTo("key-1")
+        assertThat(body.records[0].key.decodeToString()).isEqualTo("key-1")
         assertThat(body.records[0].payload?.decodeToString()).isEqualTo("value-1")
         assertThat(server.requestCount).isEqualTo(1)
     }
@@ -154,7 +154,7 @@ class MessageProducerTest {
         val requests = server.takeRequests(expectedRequets)
         val bodies = requests.map { it.responseBody<PublishRequest>() }
         val keys = bodies
-            .flatMap { body -> body.records.map { it.recordKey.decodeToString() } }
+            .flatMap { body -> body.records.map { it.key.decodeToString() } }
             .toSet()
 
         assertThat(keys).hasSize(workers * sendPerWorker)
@@ -266,7 +266,7 @@ class MessageProducerTest {
         val body = request.responseBody<PublishRequest>()
 
         assertThat(body.records).hasSize(1)
-        assertThat(body.records.single().recordKey.decodeToString()).isEqualTo("key-1")
+        assertThat(body.records.single().key.decodeToString()).isEqualTo("key-1")
         assertThat(body.records.single().payload!!.decodeToString()).isEqualTo("value-1")
 
         producer.close()

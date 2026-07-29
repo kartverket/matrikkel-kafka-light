@@ -36,7 +36,7 @@ class RecordsRepositoryTest : WithDatabase {
     val identity = ServiceIdentity("fake-user")
     val idempotencyKey = "idempotency_key"
     val record = PublishRecord(
-        recordKey = "record_key".toByteArray(),
+        key = "record_key".toByteArray(),
         payload = "custom payload".toByteArray(),
     )
 
@@ -144,7 +144,7 @@ class RecordsRepositoryTest : WithDatabase {
         }
 
         val existingRecord: PublishResponse? = dataSource().withSession {
-            findExistingPublishedRecord(topic, identity, idempotencyKey, record.recordKey)
+            findExistingPublishedRecord(topic, identity, idempotencyKey, record.key)
         }
 
         assertThat(existingRecord).isNotNull().all {

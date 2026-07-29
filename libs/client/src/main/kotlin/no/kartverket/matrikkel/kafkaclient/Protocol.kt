@@ -18,7 +18,7 @@ data class PublishRequest(
 
 @Serializable
 data class PublishRecord(
-    val recordKey: ByteArray,
+    val key: ByteArray,
     val payload: ByteArray?,
 )
 

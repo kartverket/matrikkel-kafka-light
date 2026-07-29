@@ -24,11 +24,9 @@ import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
 import no.kartverket.matrikkel.broker.service.records.Records
 import no.kartverket.matrikkel.broker.standardPlugins
-import no.kartverket.matrikkel.kafkaclient.MessageProducer
 import no.kartverket.matrikkel.kafkaclient.PublishRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
-import no.kartverket.matrikkel.kafkaclient.StringSerde
 import org.junit.jupiter.api.Test
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -61,7 +59,7 @@ class TopicRoutesTest {
         idempotencyKey = "idempotency_key",
         records = listOf(
             PublishRecord(
-                recordKey = "record_key".toByteArray(),
+                key = "record_key".toByteArray(),
                 payload = "payload".toByteArray(),
             )
         )
@@ -130,7 +128,7 @@ class TopicRoutesTest {
                 header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                 header(HttpHeaders.ContentType, ContentType.Application.Cbor)
                 setBody(request.copy(
-                    records = request.records.map { it.copy(recordKey = "".toByteArray()) }
+                    records = request.records.map { it.copy(key = "".toByteArray()) }
                 ))
             }
 

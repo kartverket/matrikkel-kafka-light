@@ -98,7 +98,7 @@ object RecordsRepository {
                 "topic" to topic.name,
                 "sequence" to sequence++,
                 "producer_identity" to identity.value,
-                "record_key" to record.recordKey,
+                "record_key" to record.key,
                 "idempotency_key" to request.idempotencyKey,
                 "correlation_id" to correlationId.toJavaUuid(),
                 "payload" to record.payload,
