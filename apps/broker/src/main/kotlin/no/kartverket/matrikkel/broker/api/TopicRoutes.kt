@@ -50,15 +50,27 @@ fun Route.topicRoutes(
             }
 
             post("poll") {
+                val topic = call.topicParam()
+                val identity = call.serviceIdentity()
+                val request = call.receive<PublishRequest>()
+                val correlationId = Uuid.parseOrNull(call.request.headers[HttpHeaders.XCorrelationId] ?: "")
+
                 call.respondResult(
-                    recordsService.poll(
-                        ctx = Records.Service.Ctx(
-                            topic = call.topicParam(),
-                            identity = call.serviceIdentity(),
-                            correlationId = Uuid.parse("")
-                        ),
-                        request = call.receive(),
-                    )
+                    when {
+                        !topic.acl.canConsume(identity) -> forbidden()
+                        correlationId == null -> badRequest("invalid_request", "Missing or invalid ${HttpHeaders.XCorrelationId} header")
+
+                        else -> {
+                            recordsService.poll(
+                                ctx = Records.Service.Ctx(
+                                    topic = call.topicParam(),
+                                    identity = call.serviceIdentity(),
+                                    correlationId = correlationId
+                                ),
+                                request = call.receive(),
+                            )
+                        }
+                    }
                 )
             }
 
