@@ -62,7 +62,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
     )
 
     class Impl<TKey, TValue>(
-        private val config: MessageConsumer.Config<TKey, TValue>,
+        private val config: Config<TKey, TValue>,
     ) : MessageConsumer<TKey, TValue> {
         private var leaseToken: String? = null
         private val client = HttpClient(CIO) {
