@@ -44,7 +44,7 @@ data class PollRequest (
 )
 
 @Serializable
-data class PollRecords(
+data class PollRecord(
     val key: ByteArray,
     val payload: ByteArray?,
     val sequence: Long,
@@ -53,7 +53,7 @@ data class PollRecords(
 
 @Serializable
 data class PollResponse (
-    val records: List<PollRecords>,
+    val records: List<PollRecord>,
     val leaseToken: String,
 )
 

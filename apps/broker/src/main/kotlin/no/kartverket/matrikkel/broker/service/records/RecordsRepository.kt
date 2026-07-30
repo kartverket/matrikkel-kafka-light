@@ -6,7 +6,7 @@ import kotliquery.queryOf
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.repository.DbMutex.DbLockAcquired
-import no.kartverket.matrikkel.kafkaclient.PollRecords
+import no.kartverket.matrikkel.kafkaclient.PollRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
 import org.intellij.lang.annotations.Language
@@ -133,7 +133,7 @@ object RecordsRepository {
         topic: Topic,
         maxRecords: Int,
         offset: Long,
-    ): List<PollRecords> {
+    ): List<PollRecord> {
         val paramMapPoll = mapOf(
             "topic" to topic.name,
             "sequence" to offset,
@@ -150,7 +150,7 @@ object RecordsRepository {
         """.trimIndent(), paramMapPoll
         )
             .map {
-                PollRecords(
+                PollRecord(
                     key = it.bytes("record_key"),
                     payload = it.bytes("payload"),
                     sequence = it.long("sequence"),
