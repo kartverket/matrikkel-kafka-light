@@ -40,6 +40,7 @@ data class PollRequest (
     val maxRecords: Int,
     val consumerGroup: String,
     val instanceId: String,
+    val initialOffsetPolicy: InitialOffsetPolicy,
 )
 
 @Serializable

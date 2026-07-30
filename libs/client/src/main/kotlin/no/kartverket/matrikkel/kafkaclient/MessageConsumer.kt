@@ -58,6 +58,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
         val instanceId: String,
         val timeout: Duration = 10.seconds,
         val maxRecords: Int = 100,
+        val initialOffsetPolicy: InitialOffsetPolicy
     )
 
     class Impl<TKey, TValue>(
@@ -99,6 +100,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                             maxRecords = maxRecords ?: config.maxRecords,
                             consumerGroup = config.consumerGroup,
                             instanceId = config.instanceId,
+                            initialOffsetPolicy = config.initialOffsetPolicy,
                         )
                     )
 

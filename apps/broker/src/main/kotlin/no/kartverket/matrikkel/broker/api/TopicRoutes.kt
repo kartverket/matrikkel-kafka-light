@@ -12,6 +12,7 @@ import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
 import no.kartverket.matrikkel.broker.service.records.Records
+import no.kartverket.matrikkel.kafkaclient.PollRequest
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import kotlin.uuid.Uuid
 
@@ -52,22 +53,25 @@ fun Route.topicRoutes(
             post("poll") {
                 val topic = call.topicParam()
                 val identity = call.serviceIdentity()
-                val request = call.receive<PublishRequest>()
+                val request = call.receive<PollRequest>()
                 val correlationId = Uuid.parseOrNull(call.request.headers[HttpHeaders.XCorrelationId] ?: "")
 
                 call.respondResult(
                     when {
                         !topic.acl.canConsume(identity) -> forbidden()
                         correlationId == null -> badRequest("invalid_request", "Missing or invalid ${HttpHeaders.XCorrelationId} header")
+                        request.consumerGroup.isBlank() -> badRequest("invalid_request", "Group cannot be null or empty")
+                        request.instanceId.isBlank() -> badRequest("invalid_request", "Instance cannot be null or empty")
+                        request.maxRecords  !in 1..1000 -> badRequest("invalid_request", "max records must be in range 1..1000")
 
                         else -> {
                             recordsService.poll(
                                 ctx = Records.Service.Ctx(
-                                    topic = call.topicParam(),
-                                    identity = call.serviceIdentity(),
+                                    topic = topic,
+                                    identity = identity,
                                     correlationId = correlationId
                                 ),
-                                request = call.receive(),
+                                request = request,
                             )
                         }
                     }
