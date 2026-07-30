@@ -6,6 +6,7 @@ import kotliquery.queryOf
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.repository.DbMutex.DbLockAcquired
+import no.kartverket.matrikkel.kafkaclient.PollRecords
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
 import org.intellij.lang.annotations.Language
@@ -125,5 +126,39 @@ object RecordsRepository {
                 publishedAt = dbNow,
             )
         }
+    }
+
+    context(tx: Session)
+    fun pollRecords(
+        topic: Topic,
+        maxRecords: Int,
+        offset: Long,
+    ): List<PollRecords> {
+        val paramMapPoll = mapOf(
+            "topic" to topic.name,
+            "sequence" to offset,
+            "maxRecords" to maxRecords
+        )
+
+        @Language("SQL")
+        val query = queryOf(
+            """
+            SELECT record_key, payload, sequence, published_at
+            FROM records
+            WHERE topic = :topic AND sequence > :sequence
+            LIMIT :maxRecords
+        """.trimIndent(), paramMapPoll
+        )
+            .map {
+                PollRecords(
+                    key = it.bytes("record_key"),
+                    payload = it.bytes("payload"),
+                    sequence = it.long("sequence"),
+                    publishedAt = it.instant("published_at").toKotlinInstant()
+                )
+            }
+            .asList
+
+        return tx.run(query)
     }
 }
