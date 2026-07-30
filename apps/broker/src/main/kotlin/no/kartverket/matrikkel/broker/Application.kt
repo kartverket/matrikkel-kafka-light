@@ -7,6 +7,7 @@ import io.ktor.server.auth.Authentication
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.http.content.staticResources
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.callid.CallId
 import io.ktor.server.plugins.callid.callId
@@ -47,6 +48,7 @@ fun runApplication(disableSecurity: Boolean = false) {
         }
 
         routing {
+            staticResources("/internal/introspect", "static")
             authenticate(*security.authproviders) {
                 topicRoutes(
                     topicCatalog = config.topicsCatalog,
