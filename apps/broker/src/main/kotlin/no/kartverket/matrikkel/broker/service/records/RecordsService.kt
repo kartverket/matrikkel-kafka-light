@@ -1,14 +1,19 @@
 package no.kartverket.matrikkel.broker.service.records
 
+import no.kartverket.matrikkel.broker.ServiceException
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.repository.DbMutex
 import no.kartverket.matrikkel.broker.repository.withTransaction
+import no.kartverket.matrikkel.broker.service.records.LeaseRepository.acquireLease
+import no.kartverket.matrikkel.broker.service.records.OffsetRepository.getOffset
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.currentHeadForTopic
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.findExistingPublishedRecord
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.insertRecords
+import no.kartverket.matrikkel.broker.service.records.RecordsRepository.pollRecords
 import no.kartverket.matrikkel.kafkaclient.*
 import javax.sql.DataSource
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 object Records {
@@ -57,7 +62,17 @@ object Records {
             ctx: Service.Ctx,
             request: PollRequest
         ): Result<PollResponse> {
-            return Result.failure("poll to ${ctx.topic.name} by ${ctx.identity.value}")
+            return dataSource.withTransaction {
+                val leaseStatus = acquireLease(ctx.topic, request.consumerGroup, request.instanceId, Clock.System.now())
+                when (leaseStatus) {
+                    is LeaseRepository.LeaseStatus.Locked -> {Result.failure(ServiceException.locked(message = "Could not acquire lease")) }
+                    is LeaseRepository.LeaseStatus.Acquired -> {
+                        val offset = getOffset(ctx.topic, request.consumerGroup, request.initialOffsetPolicy)
+                        val polledRecords = pollRecords(ctx.topic, request.maxRecords, offset)
+                        Result.success(PollResponse(polledRecords, leaseStatus.lease.token))
+                    }
+                }
+            }
         }
 
         override suspend fun commit(
