@@ -75,5 +75,15 @@ class ServiceException(
             code = code,
             message = message
         )
+
+        fun locked(
+            code: String = "locked",
+            message: String
+        ) = ServiceException(
+            status = HttpStatusCode.Locked,
+            code = code,
+            message = message
+        )
+
     }
 }
