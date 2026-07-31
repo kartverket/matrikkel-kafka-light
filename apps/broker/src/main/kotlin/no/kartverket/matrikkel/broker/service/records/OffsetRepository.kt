@@ -3,11 +3,12 @@ package no.kartverket.matrikkel.broker.service.records
 import kotliquery.TransactionalSession
 import kotliquery.queryOf
 import no.kartverket.matrikkel.broker.domain.Topic
+import no.kartverket.matrikkel.broker.service.records.LeaseRepository.LeaseStatus
 import no.kartverket.matrikkel.kafkaclient.InitialOffsetPolicy
 import org.intellij.lang.annotations.Language
 
 object OffsetRepository {
-    context(tx: TransactionalSession)
+    context(tx: TransactionalSession, _: LeaseStatus.Acquired)
     fun getOffset(
         topic: Topic,
         consumerGroup: String,

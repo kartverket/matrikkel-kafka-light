@@ -6,6 +6,7 @@ import kotliquery.queryOf
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.repository.DbMutex.DbLockAcquired
+import no.kartverket.matrikkel.broker.service.records.LeaseRepository.LeaseStatus
 import no.kartverket.matrikkel.kafkaclient.PollRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
@@ -128,7 +129,7 @@ object RecordsRepository {
         }
     }
 
-    context(tx: Session)
+    context(tx: Session, _: LeaseStatus.Acquired)
     fun pollRecords(
         topic: Topic,
         maxRecords: Int,

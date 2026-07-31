@@ -2,6 +2,7 @@ package no.kartverket.matrikkel.broker.service.records
 
 import kotliquery.TransactionalSession
 import kotliquery.queryOf
+import no.kartverket.matrikkel.broker.ServiceException
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.isAfter
 import no.kartverket.matrikkel.broker.isBefore
@@ -32,6 +33,26 @@ object LeaseRepository {
         val token: String,
         val expiresAt: Instant,
     )
+
+    context(tx: TransactionalSession)
+    fun <T> withLease(
+        topic: Topic,
+        consumerGroup: String,
+        instanceId: String,
+        now: Instant = Clock.System.now(),
+        fn: context(LeaseStatus.Acquired) (Lease) -> T
+    ): Result<T> {
+        return when(val leaseStatus = acquireLease(topic, consumerGroup, instanceId, now)) {
+            is LeaseStatus.Locked -> Result.failure(ServiceException.locked(message = "Could not acquire lease"))
+            is LeaseStatus.Acquired -> {
+                with(leaseStatus) {
+                    runCatching {
+                        fn(lease)
+                    }
+                }
+            }
+        }
+    }
 
     context(tx: TransactionalSession)
     fun acquireLease(

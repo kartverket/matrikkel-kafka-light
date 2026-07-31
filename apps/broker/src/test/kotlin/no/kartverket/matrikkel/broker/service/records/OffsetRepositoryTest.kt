@@ -1,13 +1,20 @@
 package no.kartverket.no.kartverket.matrikkel.broker.service.records
 
 import assertk.assertThat
+import assertk.assertions.hasMessage
 import assertk.assertions.isEqualTo
+import assertk.assertions.isFailure
+import assertk.assertions.isSuccess
+import io.ktor.server.config.configLoaders
 import kotlinx.coroutines.runBlocking
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.repository.DbMutex
 import no.kartverket.matrikkel.broker.repository.withTransaction
+import no.kartverket.matrikkel.broker.service.records.LeaseRepository
+import no.kartverket.matrikkel.broker.service.records.LeaseRepository.acquireLease
+import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
 import no.kartverket.matrikkel.broker.service.records.OffsetRepository
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository
 import no.kartverket.matrikkel.kafkaclient.InitialOffsetPolicy
@@ -36,41 +43,64 @@ class OffsetRepositoryTest : WithDatabase {
         payload = "custom payload".toByteArray(),
     )
     val consumerGroup = "dummy_consumer_group"
+    val instanceId = "instance"
 
     @Test
     fun `should create offset and return 0 for InitialOffsetPolicy EARLIEST`(): Unit = runBlocking {
-
         createRecord(10)
 
         val initalOffsetPolicy = InitialOffsetPolicy.EARLIEST
         val offset = dataSource().withTransaction {
-            OffsetRepository.getOffset(topic, consumerGroup, initalOffsetPolicy)
+            withLease(topic, consumerGroup, instanceId) {
+                OffsetRepository.getOffset(topic, consumerGroup, initalOffsetPolicy)
+            }
         }
-        assertThat(offset).isEqualTo(0)
+
+        assertThat(offset).isSuccess().isEqualTo(0)
     }
 
     @Test
     fun `should create offset and return 10 for OffsetPolicy LATEST`(): Unit = runBlocking {
-
         createRecord(10)
 
         val initalOffsetPolicy = InitialOffsetPolicy.LATEST
         val offset = dataSource().withTransaction {
-            OffsetRepository.getOffset(topic, consumerGroup, initalOffsetPolicy)
+            withLease(topic, consumerGroup, instanceId) {
+                OffsetRepository.getOffset(topic, consumerGroup, initalOffsetPolicy)
+            }
         }
-        assertThat(offset).isEqualTo(10)
 
+        assertThat(offset).isSuccess().isEqualTo(10)
     }
 
     @Test
     fun `should create offset and return 0 for OffsetPolicy LATEST`(): Unit = runBlocking {
-
         val initalOffsetPolicy = InitialOffsetPolicy.LATEST
         val offset = dataSource().withTransaction {
-            OffsetRepository.getOffset(topic, consumerGroup, initalOffsetPolicy)
+            withLease(topic, consumerGroup, instanceId) {
+                OffsetRepository.getOffset(topic, consumerGroup, initalOffsetPolicy)
+            }
         }
-        assertThat(offset).isEqualTo(0)
 
+        assertThat(offset).isSuccess().isEqualTo(0)
+    }
+
+    @Test
+    fun `cannot acquire lease`(): Unit = runBlocking {
+        val initalOffsetPolicy = InitialOffsetPolicy.LATEST
+        val offset = dataSource().withTransaction {
+            // Stealing the lease here
+            acquireLease(topic, consumerGroup, "anotherInstance")
+
+            withLease(topic, consumerGroup, instanceId) {
+                OffsetRepository.getOffset(topic, consumerGroup, initalOffsetPolicy)
+            }
+        }
+
+        assertThat(offset).isFailure()
+            .given {
+                assertThat(it).hasMessage("Could not acquire lease")
+            }
     }
 
     private suspend fun createRecord(numrRcords: Int) {
