@@ -63,7 +63,7 @@ object Records {
             request: PollRequest
         ): Result<PollResponse> {
             return dataSource.withTransaction {
-                val leaseStatus = acquireLease(ctx.topic, request.consumerGroup, request.instanceId, Clock.System.now())
+                val leaseStatus = acquireLease(ctx.topic, request.consumerGroup, request.instanceId)
                 when (leaseStatus) {
                     is LeaseRepository.LeaseStatus.Locked -> {Result.failure(ServiceException.locked(message = "Could not acquire lease")) }
                     is LeaseRepository.LeaseStatus.Acquired -> {

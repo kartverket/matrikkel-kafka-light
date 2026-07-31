@@ -8,7 +8,9 @@ import no.kartverket.matrikkel.broker.isBefore
 import no.kartverket.matrikkel.broker.repository.DbMutex
 import org.intellij.lang.annotations.Language
 import java.util.UUID
+import kotlin.time.Clock
 import kotlin.time.Instant
+import kotlin.time.toJavaInstant
 
 import kotlin.time.toKotlinInstant
 
@@ -36,7 +38,7 @@ object LeaseRepository {
         topic: Topic,
         consumerGroup: String,
         instanceId: String,
-        now: Instant,
+        now: Instant = Clock.System.now(),
     ): LeaseStatus {
 
         val paramMapTopicConsumer = mapOf(
@@ -113,7 +115,7 @@ object LeaseRepository {
             "consumer_group" to newLease.consumerGroup,
             "instance_id" to newLease.instanceId,
             "token" to newLease.token,
-            "expires_at" to newLease.expiresAt
+            "expires_at" to newLease.expiresAt.toJavaInstant()
         )
 
         @Language("SQL")

@@ -39,8 +39,10 @@ class OffsetRepositoryTest : WithDatabase {
 
     @Test
     fun `should create offset and return 0 for InitialOffsetPolicy EARLIEST`(): Unit = runBlocking {
-        val initalOffsetPolicy = InitialOffsetPolicy.EARLIEST
 
+        createRecord(10)
+
+        val initalOffsetPolicy = InitialOffsetPolicy.EARLIEST
         val offset = dataSource().withTransaction {
             OffsetRepository.getOffset(topic, consumerGroup, initalOffsetPolicy)
         }
@@ -50,10 +52,31 @@ class OffsetRepositoryTest : WithDatabase {
     @Test
     fun `should create offset and return 10 for OffsetPolicy LATEST`(): Unit = runBlocking {
 
-        // Insert 10 records
+        createRecord(10)
+
+        val initalOffsetPolicy = InitialOffsetPolicy.LATEST
+        val offset = dataSource().withTransaction {
+            OffsetRepository.getOffset(topic, consumerGroup, initalOffsetPolicy)
+        }
+        assertThat(offset).isEqualTo(10)
+
+    }
+
+    @Test
+    fun `should create offset and return 0 for OffsetPolicy LATEST`(): Unit = runBlocking {
+
+        val initalOffsetPolicy = InitialOffsetPolicy.LATEST
+        val offset = dataSource().withTransaction {
+            OffsetRepository.getOffset(topic, consumerGroup, initalOffsetPolicy)
+        }
+        assertThat(offset).isEqualTo(0)
+
+    }
+
+    private suspend fun createRecord(numrRcords: Int) {
         dataSource().withTransaction {
             DbMutex.withLock(TestLock, topic.name) {
-                repeat(10) { no ->
+                repeat(numrRcords) { no ->
                     RecordsRepository.insertRecords(
                         topic = topic,
                         identity = identity,
@@ -66,12 +89,5 @@ class OffsetRepositoryTest : WithDatabase {
                 }
             }
         }
-
-        val initalOffsetPolicy = InitialOffsetPolicy.LATEST
-        val offset = dataSource().withTransaction {
-            OffsetRepository.getOffset(topic, consumerGroup, initalOffsetPolicy)
-        }
-        assertThat(offset).isEqualTo(10)
-
     }
 }
