@@ -137,10 +137,9 @@ class RecordsRepositoryTest : WithDatabase {
 
         assertThat(polledRecords).isSuccess()
             .given {
-                val polledRecordsList = it
-                assertThat(polledRecordsList).hasSize(10)
-                assertThat(polledRecordsList.first().sequence).isEqualTo(1)
-                assertThat(polledRecordsList.last().sequence).isEqualTo(10)
+                assertThat(it).hasSize(10)
+                assertThat(it.first().sequence).isEqualTo(1)
+                assertThat(it.last().sequence).isEqualTo(10)
             }
     }
 
@@ -155,10 +154,9 @@ class RecordsRepositoryTest : WithDatabase {
 
         assertThat(polledRecords).isSuccess()
             .given {
-                val polledRecordsList = it
-                assertThat(polledRecordsList).hasSize(10)
-                assertThat(polledRecordsList.first().sequence).isEqualTo(41)
-                assertThat(polledRecordsList.last().sequence).isEqualTo(50)
+                assertThat(it).hasSize(10)
+                assertThat(it.first().sequence).isEqualTo(41)
+                assertThat(it.last().sequence).isEqualTo(50)
             }
     }
 
@@ -173,11 +171,10 @@ class RecordsRepositoryTest : WithDatabase {
 
         assertThat(polledRecords).isSuccess()
             .given {
-                val polledRecordsList = it
-                assertThat(polledRecordsList).isNotEmpty()
-                assertThat(polledRecordsList).hasSize(5)
-                assertThat(polledRecordsList.first().sequence).isEqualTo(1)
-                assertThat(polledRecordsList.last().sequence).isEqualTo(5)
+                assertThat(it).isNotEmpty()
+                assertThat(it).hasSize(5)
+                assertThat(it.first().sequence).isEqualTo(1)
+                assertThat(it.last().sequence).isEqualTo(5)
             }
     }
 
