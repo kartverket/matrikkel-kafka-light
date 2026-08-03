@@ -68,7 +68,7 @@ object RecordsRepository {
         identity: ServiceIdentity,
         correlationId: Uuid,
         request: PublishRequest,
-        initialSequence: Long = currentHeadForTopic(topic) + 1,
+        initialSequence: Long = currentHeadForTopic(topic),
     ): Result<PublishResponse> {
         @Language("SQL")
         val sql = """
@@ -93,12 +93,11 @@ object RecordsRepository {
             ) ON CONFLICT (topic, record_key, producer_identity, idempotency_key) DO NOTHING
         """.trimIndent()
 
-        val lastRecord = request.records.last()
         var sequence = initialSequence
         val params = request.records.map { record ->
             mapOf(
                 "topic" to topic.name,
-                "sequence" to sequence++,
+                "sequence" to ++sequence,
                 "producer_identity" to identity.value,
                 "record_key" to record.key,
                 "idempotency_key" to request.idempotencyKey,
@@ -122,7 +121,7 @@ object RecordsRepository {
 
             PublishResponse(
                 topic = topic.name,
-                sequence = sequence - 1,
+                sequence = sequence,
                 idempotencyKey = request.idempotencyKey,
                 publishedAt = dbNow,
             )
