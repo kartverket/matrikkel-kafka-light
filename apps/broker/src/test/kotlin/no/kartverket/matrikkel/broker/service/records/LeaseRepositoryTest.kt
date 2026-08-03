@@ -42,6 +42,7 @@ class LeaseRepositoryTest : WithDatabase {
                 now = currentTime,
             )
 
+            var firstLeaseToken: String? = null
             assertThat(leaseStatus).isInstanceOf(LeaseStatus.Acquired::class)
                 .given {
                     val lease = it.lease
@@ -51,6 +52,7 @@ class LeaseRepositoryTest : WithDatabase {
                     assertThat(lease.instanceId).isEqualTo("dummy_instance_id")
                     assertThat(lease.expiresAt).isEqualTo(currentTime + topic.leaseTime)
                     assertThat(lease.token).isNotEmpty()
+                    firstLeaseToken = lease.token
                 }
 
             val newLease: LeaseStatus = acquireLease(
@@ -63,6 +65,7 @@ class LeaseRepositoryTest : WithDatabase {
                 .given {
                     val lease = it.lease
                     assertThat(lease.expiresAt).isEqualTo(currentTime + topic.leaseTime + 10.seconds)
+                    assertThat(lease.token).isEqualTo(firstLeaseToken)
                 }
 
         }
