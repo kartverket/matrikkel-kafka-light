@@ -83,24 +83,6 @@ class OffsetRepositoryTest : WithDatabase {
         assertThat(offset).isSuccess().isEqualTo(0)
     }
 
-    @Test
-    fun `cannot acquire lease`(): Unit = runBlocking {
-        val initalOffsetPolicy = InitialOffsetPolicy.LATEST
-        val offset = dataSource().withTransaction {
-            // Stealing the lease here
-            acquireLease(topic, consumerGroup, "anotherInstance")
-
-            withLease(topic, consumerGroup, instanceId) {
-                OffsetRepository.getOffset(topic, consumerGroup, initalOffsetPolicy)
-            }
-        }
-
-        assertThat(offset).isFailure()
-            .given {
-                assertThat(it).hasMessage("Could not acquire lease")
-            }
-    }
-
     private suspend fun createRecord(numRcords: Int) {
         dataSource().withTransaction {
             DbMutex.withLock(TestLock, topic.name) {

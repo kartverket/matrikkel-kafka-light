@@ -1,16 +1,24 @@
 package no.kartverket.no.kartverket.matrikkel.broker.service.records
 
+import assertk.all
 import assertk.assertThat
+import assertk.assertions.hasMessage
 import assertk.assertions.isEqualTo
+import assertk.assertions.isFailure
 import assertk.assertions.isInstanceOf
 import assertk.assertions.isNotEmpty
 import assertk.assertions.isNotNull
+import assertk.assertions.isSuccess
+import assertk.assertions.prop
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.runBlocking
+import no.kartverket.matrikkel.broker.ServiceException
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.LeaseStatus
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.acquireLease
+import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
 import org.junit.jupiter.api.Test
 import kotlin.time.Clock
@@ -74,7 +82,6 @@ class LeaseRepositoryTest : WithDatabase {
 
     @Test
     fun `should not acquire lease that is taken`(): Unit = runBlocking {
-
         // Another instance acquires lease first
         createLease(currentTime)
 
@@ -93,12 +100,48 @@ class LeaseRepositoryTest : WithDatabase {
     }
 
     @Test
+    fun `withLease should acquire lease that is not taken`(): Unit = runBlocking {
+        val leaseResult = dataSource().withTransaction {
+            withLease(topic, consumerGroup, "dummy_instance_id") {
+                "Lease acquired"
+            }
+        }
+
+        assertThat(leaseResult).isSuccess()
+            .given {
+                assertThat(it).isEqualTo("Lease acquired")
+            }
+    }
+
+    @Test
+    fun `withLease should give failure if lease is taken`(): Unit = runBlocking {
+        // Another instance acquires lease first
+        createLease(currentTime)
+
+        val leaseResult = dataSource().withTransaction {
+            withLease(topic, consumerGroup, "dummy_instance_id") {
+                error("Should not acquire lease")
+            }
+        }
+
+        assertThat(leaseResult).isFailure()
+            .given {
+                assertThat(it)
+                    .isInstanceOf(ServiceException::class)
+                    .all {
+                        hasMessage("Could not acquire lease")
+                        prop(ServiceException::status).isEqualTo(HttpStatusCode.Locked)
+                    }
+            }
+    }
+
+
+    @Test
     fun `should acquire lease that is expired`(): Unit = runBlocking {
 
-        // Another instance acquires lease first
+        // Creates a lease that is expired
         createLease(currentTime - 2.minutes)
 
-        // Tries to acquire lease that is taken
         val leaseStatus: LeaseStatus = dataSource().withTransaction {
             acquireLease(
                 topic = topic,
