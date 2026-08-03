@@ -5,14 +5,12 @@ import assertk.assertions.hasMessage
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
 import assertk.assertions.isSuccess
-import io.ktor.server.config.configLoaders
 import kotlinx.coroutines.runBlocking
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.repository.DbMutex
 import no.kartverket.matrikkel.broker.repository.withTransaction
-import no.kartverket.matrikkel.broker.service.records.LeaseRepository
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.acquireLease
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
 import no.kartverket.matrikkel.broker.service.records.OffsetRepository
@@ -103,10 +101,10 @@ class OffsetRepositoryTest : WithDatabase {
             }
     }
 
-    private suspend fun createRecord(numrRcords: Int) {
+    private suspend fun createRecord(numRcords: Int) {
         dataSource().withTransaction {
             DbMutex.withLock(TestLock, topic.name) {
-                repeat(numrRcords) { no ->
+                repeat(numRcords) { no ->
                     RecordsRepository.insertRecords(
                         topic = topic,
                         identity = identity,
