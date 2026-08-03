@@ -58,7 +58,7 @@ class RecordsRepositoryTest : WithDatabase {
     @Test
     fun `should return last sequence for current head`(): Unit = runBlocking {
         val currentHead: Long = dataSource().withTransaction {
-            repeat(10) { no -> insertRecord(idempotencyKey + no) }
+            insertRecords(10)
             currentHeadForTopic(topic)
         }
 
@@ -100,7 +100,6 @@ class RecordsRepositoryTest : WithDatabase {
 
     @Test
     fun `should return existing record`(): Unit = runBlocking {
-
         val existingRecord: PublishResponse? = dataSource().withTransaction {
             insertRecord()
             findExistingPublishedRecord(topic, identity, idempotencyKey, record.key)
@@ -116,7 +115,7 @@ class RecordsRepositoryTest : WithDatabase {
 
 
     @Test
-    fun `should return empty list`(): Unit = runBlocking {
+    fun `should return empty list if not records exist for topic`(): Unit = runBlocking {
         val polledRecords = dataSource().withTransaction {
             withLease(topic, consumerGroup, instanceId) {
                 pollRecords(topic, 100, 0)
@@ -129,7 +128,7 @@ class RecordsRepositoryTest : WithDatabase {
     @Test
     fun `should return first 10 records`(): Unit = runBlocking {
         val polledRecords = dataSource().withTransaction {
-            repeat(50) { no -> insertRecord(idempotencyKey + no) }
+            insertRecords(50)
             withLease(topic, consumerGroup, instanceId) {
                 pollRecords(topic, 10, 0)
             }
@@ -146,7 +145,7 @@ class RecordsRepositoryTest : WithDatabase {
     @Test
     fun `should return last 10 records`(): Unit = runBlocking {
         val polledRecords = dataSource().withTransaction {
-            repeat(50) { no -> insertRecord(idempotencyKey + no) }
+            insertRecords(50)
             withLease(topic, consumerGroup, instanceId) {
                 pollRecords(topic, 10, 40)
             }
@@ -163,7 +162,7 @@ class RecordsRepositoryTest : WithDatabase {
     @Test
     fun `should return below maxRecords when maxRecords is more than the number of records`(): Unit = runBlocking {
         val polledRecords = dataSource().withTransaction {
-            repeat(5) { no -> insertRecord(idempotencyKey + no) }
+            insertRecords(5)
             withLease(topic, consumerGroup, instanceId) {
                 pollRecords(topic, 10, 0)
             }
@@ -171,13 +170,19 @@ class RecordsRepositoryTest : WithDatabase {
 
         assertThat(polledRecords).isSuccess()
             .given {
-                assertThat(it).isNotEmpty()
                 assertThat(it).hasSize(5)
                 assertThat(it.first().sequence).isEqualTo(1)
                 assertThat(it.last().sequence).isEqualTo(5)
             }
     }
 
+
+    context(tx: TransactionalSession)
+    private fun insertRecords(count: Int) {
+        repeat(count) {
+            insertRecord(idempotencyKey + it)
+        }
+    }
 
     context(tx: TransactionalSession)
     private fun insertRecord(newIdempotencyKey: String = idempotencyKey): Result<PublishResponse> =
