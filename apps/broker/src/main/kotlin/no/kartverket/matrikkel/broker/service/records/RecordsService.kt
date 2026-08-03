@@ -53,7 +53,7 @@ object Records {
                             identity = ctx.identity,
                             correlationId = ctx.correlationId,
                             request = request,
-                            initialSequence = currentHeadForTopic(ctx.topic) + 1
+                            initialSequence = currentHeadForTopic(ctx.topic)
                         )
                     }
                 }
