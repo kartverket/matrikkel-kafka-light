@@ -1,15 +1,11 @@
 package no.kartverket.no.kartverket.matrikkel.broker.service.records
 
-import assertk.all
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isInstanceOf
 import assertk.assertions.isNotEmpty
-import assertk.assertions.isNotEqualTo
 import assertk.assertions.isNotNull
-import assertk.assertions.prop
 import kotlinx.coroutines.runBlocking
-import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.repository.withTransaction
