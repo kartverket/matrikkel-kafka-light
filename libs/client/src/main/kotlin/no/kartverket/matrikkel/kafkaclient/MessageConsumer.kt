@@ -42,7 +42,7 @@ data class ConsumerRecord<TKey, TValue>(
 )
 
 interface MessageConsumer<TKey, TValue> : Closeable {
-    suspend fun poll(maxRecords: Int?, timeout: Duration?): ConsumerRecords<TKey, TValue>
+    suspend fun poll(maxRecords: Int? = null, timeout: Duration? = null): ConsumerRecords<TKey, TValue>
     suspend fun commitSync(sequence: Long): CommitResponse
     suspend fun seek(sequence: Long): SeekResponse
     suspend fun heartbeat(): HeartbeatResponse
@@ -108,7 +108,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             } catch (e: ClientRequestException) {
                 when (e.response.status) {
                     HttpStatusCode.Locked -> {
-                        delay(config.timeout)
+                        delay(timeout ?: config.timeout)
                         return ConsumerRecords(topic = config.topic, records = emptyList())
                     }
                     else -> throw e
@@ -144,9 +144,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
         }
 
         override fun close() {
-            TODO("Not yet implemented")
+            client.close()
         }
-
-
     }
 }
