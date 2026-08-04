@@ -8,6 +8,7 @@ on:
       - apps/broker/**
       - buildSrc/**
       - gradle/libs.versions.toml
+      - settings.gradle.kts
   workflow_dispatch:
 
 env:
