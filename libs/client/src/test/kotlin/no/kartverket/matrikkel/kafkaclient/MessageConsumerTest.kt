@@ -13,18 +13,11 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import kotlinx.coroutines.test.currentTime
-import okio.Buffer
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.cbor.Cbor
-import kotlinx.serialization.decodeFromByteArray
-import kotlinx.serialization.encodeToByteArray
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
-import okhttp3.mockwebserver.RecordedRequest
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.Test
-import java.util.concurrent.TimeUnit
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
@@ -72,7 +65,7 @@ class MessageConsumerTest {
         consumer.poll()
         consumer.close()
 
-        val request = server.takeRequest(2, TimeUnit.SECONDS) ?: fail("Could not grab http request within 2 seconds.")
+        val request = server.takeRequests(1).first()
         assertThat(request.method).isEqualTo("POST")
         assertThat(request.path).isEqualTo("/topics/test-topic/poll")
         assertThat(request.getHeader(HttpHeaders.XCorrelationId)).isEqualTo("test-correlation-id")
@@ -90,7 +83,7 @@ class MessageConsumerTest {
         consumer.poll()
         consumer.close()
 
-        val request = server.takeRequest(2, TimeUnit.SECONDS) ?: fail("Could not grab http request within 2 seconds.")
+        val request = server.takeRequests(1).first()
         val body = request.responseBody<PollRequest>()
         assertThat(body.consumerGroup).isEqualTo("test-group")
         assertThat(body.instanceId).isEqualTo("test-instance-id")
@@ -108,7 +101,7 @@ class MessageConsumerTest {
         consumer.poll(maxRecords = 5)
         consumer.close()
 
-        val request = server.takeRequest(2, TimeUnit.SECONDS) ?: fail("Could not grab http request within 2 seconds.")
+        val request = server.takeRequests(1).first()
         val body = request.responseBody<PollRequest>()
         assertThat(body.consumerGroup).isEqualTo("test-group")
         assertThat(body.instanceId).isEqualTo("test-instance-id")
@@ -125,7 +118,6 @@ class MessageConsumerTest {
         val pollResult = consumer.poll()
         consumer.close()
 
-        // Record is mapped correctly
         assertThat(pollResult.topic).isEqualTo("test-topic")
         assertThat(pollResult.records).hasSize(1)
         val firstRecord = pollResult.records.first()
@@ -247,18 +239,5 @@ class MessageConsumerTest {
         }.isInstanceOf<ClientRequestException>()
 
         consumer.close()
-    }
-
-
-    private inline fun <reified T> MockWebServer.enqueueCborResponse(body: T, code: Int = 200) {
-        enqueue(
-            MockResponse().setResponseCode(code).setHeader("Content-Type", "application/cbor")
-                .setBody(Buffer().write(Cbor.encodeToByteArray(body)))
-        )
-    }
-
-    private inline fun <reified T> RecordedRequest.responseBody(): T {
-        val bodyBytes = body.readByteArray()
-        return Cbor.decodeFromByteArray<T>(bodyBytes)
     }
 }
