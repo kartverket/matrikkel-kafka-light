@@ -146,6 +146,7 @@ object RecordsRepository {
             SELECT record_key, payload, sequence, published_at
             FROM records
             WHERE topic = :topic AND sequence > :sequence
+            ORDER BY sequence ASC
             LIMIT :maxRecords
         """.trimIndent(), paramMapPoll
         )

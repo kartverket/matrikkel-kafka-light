@@ -160,6 +160,25 @@ class RecordsRepositoryTest : WithDatabase {
     }
 
     @Test
+    fun `should return records in ascending order`(): Unit = runBlocking {
+        val offset = 10L
+        val maxRecords = 50
+
+        val polledRecords = dataSource().withTransaction {
+            insertRecords(100)
+            withLease(topic, consumerGroup, instanceId) {
+                pollRecords(topic, maxRecords, offset)
+            }
+        }
+
+        assertThat(polledRecords).isSuccess()
+            .given {
+                assertThat(it).hasSize(maxRecords)
+                assertThat(it.map { record -> record.sequence }).isEqualTo((offset+1..offset + maxRecords).toList())
+            }
+    }
+
+    @Test
     fun `should return below maxRecords when maxRecords is more than the number of records`(): Unit = runBlocking {
         val polledRecords = dataSource().withTransaction {
             insertRecords(5)
