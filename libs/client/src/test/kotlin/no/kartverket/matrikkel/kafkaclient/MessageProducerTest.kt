@@ -8,15 +8,10 @@ import io.ktor.http.*
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.cbor.Cbor
-import kotlinx.serialization.decodeFromByteArray
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
-import okhttp3.mockwebserver.RecordedRequest
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.Test
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -65,7 +60,7 @@ class MessageProducerTest {
         val body = request.responseBody<PublishRequest>()
 
         assertThat(body.records).hasSize(3)
-        assertThat(body.records[0].recordKey.decodeToString()).isEqualTo("key-1")
+        assertThat(body.records[0].key.decodeToString()).isEqualTo("key-1")
         assertThat(body.records[0].payload?.decodeToString()).isEqualTo("value-1")
         assertThat(server.requestCount).isEqualTo(1)
     }
@@ -154,7 +149,7 @@ class MessageProducerTest {
         val requests = server.takeRequests(expectedRequets)
         val bodies = requests.map { it.responseBody<PublishRequest>() }
         val keys = bodies
-            .flatMap { body -> body.records.map { it.recordKey.decodeToString() } }
+            .flatMap { body -> body.records.map { it.key.decodeToString() } }
             .toSet()
 
         assertThat(keys).hasSize(workers * sendPerWorker)
@@ -266,7 +261,7 @@ class MessageProducerTest {
         val body = request.responseBody<PublishRequest>()
 
         assertThat(body.records).hasSize(1)
-        assertThat(body.records.single().recordKey.decodeToString()).isEqualTo("key-1")
+        assertThat(body.records.single().key.decodeToString()).isEqualTo("key-1")
         assertThat(body.records.single().payload!!.decodeToString()).isEqualTo("value-1")
 
         producer.close()
@@ -300,22 +295,5 @@ class MessageProducerTest {
         assertThat(server.requestCount).isEqualTo(3)
 
         producer.close()
-    }
-
-    private fun MockWebServer.takeRequests(n: Int): List<RecordedRequest> {
-        var counter = 0
-        return buildList {
-            repeat(n) {
-                add(
-                    takeRequest(2, TimeUnit.SECONDS)
-                        ?: fail("Could not grab http request within 2 seconds. Failed after $counter")
-                )
-            }
-        }
-    }
-
-    private inline fun <reified T> RecordedRequest.responseBody(): T {
-        val bodyBytes = body.readByteArray()
-        return Cbor.decodeFromByteArray<T>(bodyBytes)
     }
 }

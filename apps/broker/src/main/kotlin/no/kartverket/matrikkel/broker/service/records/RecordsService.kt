@@ -4,9 +4,12 @@ import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.repository.DbMutex
 import no.kartverket.matrikkel.broker.repository.withTransaction
+import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
+import no.kartverket.matrikkel.broker.service.records.OffsetRepository.getOffset
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.currentHeadForTopic
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.findExistingPublishedRecord
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.insertRecords
+import no.kartverket.matrikkel.broker.service.records.RecordsRepository.pollRecords
 import no.kartverket.matrikkel.kafkaclient.*
 import javax.sql.DataSource
 import kotlin.uuid.Uuid
@@ -18,6 +21,7 @@ object Records {
             val identity: ServiceIdentity,
             val correlationId: Uuid,
         )
+
         suspend fun publish(ctx: Ctx, request: PublishRequest): Result<PublishResponse>
         suspend fun poll(ctx: Ctx, request: PollRequest): Result<PollResponse>
         suspend fun commit(ctx: Ctx, request: CommitRequest): Result<CommitResponse>
@@ -37,7 +41,8 @@ object Records {
             return dataSource.withTransaction {
                 DbMutex.withLock(PublishLock, ctx.topic.name) {
                     val lastRecord = request.records.last()
-                    val existing = findExistingPublishedRecord(ctx.topic, ctx.identity, request.idempotencyKey, lastRecord.recordKey)
+                    val existing =
+                        findExistingPublishedRecord(ctx.topic, ctx.identity, request.idempotencyKey, lastRecord.key)
                     if (existing != null) {
                         Result.success(existing)
                     } else {
@@ -46,7 +51,7 @@ object Records {
                             identity = ctx.identity,
                             correlationId = ctx.correlationId,
                             request = request,
-                            initialSequence = currentHeadForTopic(ctx.topic) + 1
+                            initialSequence = currentHeadForTopic(ctx.topic)
                         )
                     }
                 }
@@ -57,7 +62,13 @@ object Records {
             ctx: Service.Ctx,
             request: PollRequest
         ): Result<PollResponse> {
-            return Result.failure("poll to ${ctx.topic.name} by ${ctx.identity.value}")
+            return dataSource.withTransaction {
+                withLease(ctx.topic, request.consumerGroup, request.instanceId) { lease ->
+                    val offset = getOffset(ctx.topic, request.consumerGroup, request.initialOffsetPolicy)
+                    val polledRecords = pollRecords(ctx.topic, request.maxRecords, offset)
+                    PollResponse(polledRecords, lease.token)
+                }
+            }
         }
 
         override suspend fun commit(

@@ -4,15 +4,18 @@ import assertk.all
 import assertk.assertThat
 import assertk.assertions.*
 import kotlinx.coroutines.runBlocking
+import kotliquery.TransactionalSession
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.repository.DbMutex
 import no.kartverket.matrikkel.broker.repository.withSession
 import no.kartverket.matrikkel.broker.repository.withTransaction
+import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.currentHeadForTopic
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.findExistingPublishedRecord
+import no.kartverket.matrikkel.broker.service.records.RecordsRepository.pollRecords
 import no.kartverket.matrikkel.kafkaclient.PublishRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
@@ -36,9 +39,11 @@ class RecordsRepositoryTest : WithDatabase {
     val identity = ServiceIdentity("fake-user")
     val idempotencyKey = "idempotency_key"
     val record = PublishRecord(
-        recordKey = "record_key".toByteArray(),
+        key = "record_key".toByteArray(),
         payload = "custom payload".toByteArray(),
     )
+    val consumerGroup = "dummy_consumer_group"
+    val instanceId = "instance"
 
 
     @Test
@@ -53,19 +58,7 @@ class RecordsRepositoryTest : WithDatabase {
     @Test
     fun `should return last sequence for current head`(): Unit = runBlocking {
         val currentHead: Long = dataSource().withTransaction {
-            DbMutex.withLock(TestLock, topic.name) {
-                repeat(10) { no ->
-                    RecordsRepository.insertRecords(
-                        topic = topic,
-                        identity = identity,
-                        correlationId = Uuid.random(),
-                        request = PublishRequest(
-                            idempotencyKey = idempotencyKey + no,
-                            records = listOf(record),
-                        ),
-                    )
-                }
-            }
+            insertRecords(10)
             currentHeadForTopic(topic)
         }
 
@@ -84,17 +77,7 @@ class RecordsRepositoryTest : WithDatabase {
     @Test
     fun `should return published record on insert`(): Unit = runBlocking {
         val insertedRow = dataSource().withTransaction {
-            DbMutex.withLock(TestLock, topic.name) {
-                RecordsRepository.insertRecords(
-                    topic = topic,
-                    identity = identity,
-                    correlationId = Uuid.random(),
-                    request = PublishRequest(
-                        idempotencyKey = idempotencyKey,
-                        records = listOf(record),
-                    ),
-                )
-            }
+            insertRecord()
         }
 
         assertThat(insertedRow).isSuccess().isNotNull().all {
@@ -108,43 +91,18 @@ class RecordsRepositoryTest : WithDatabase {
     @Test
     fun `should return failure on duplicate insert`(): Unit = runBlocking {
         dataSource().withTransaction {
-            DbMutex.withLock(TestLock, topic.name) {
-                RecordsRepository.insertRecords(
-                    topic, identity, Uuid.random(), PublishRequest(
-                        idempotencyKey = idempotencyKey,
-                        records = listOf(record),
-                    )
-                )
-            }
-        }
+            insertRecord()
+            val insertedRow = insertRecord()
 
-        val insertedRow = dataSource().withTransaction {
-            DbMutex.withLock(TestLock, topic.name) {
-                RecordsRepository.insertRecords(topic, identity, Uuid.random(), PublishRequest(
-                    idempotencyKey = idempotencyKey,
-                    records = listOf(record),
-                )
-                )
-            }
+            assertThat(insertedRow).isFailure()
         }
-
-        assertThat(insertedRow).isFailure()
     }
 
     @Test
     fun `should return existing record`(): Unit = runBlocking {
-        dataSource().withTransaction {
-            DbMutex.withLock(TestLock, topic.name) {
-                RecordsRepository.insertRecords(topic, identity, Uuid.random(), PublishRequest(
-                    idempotencyKey = idempotencyKey,
-                    records = listOf(record),
-                )
-                )
-            }
-        }
-
-        val existingRecord: PublishResponse? = dataSource().withSession {
-            findExistingPublishedRecord(topic, identity, idempotencyKey, record.recordKey)
+        val existingRecord: PublishResponse? = dataSource().withTransaction {
+            insertRecord()
+            findExistingPublishedRecord(topic, identity, idempotencyKey, record.key)
         }
 
         assertThat(existingRecord).isNotNull().all {
@@ -154,4 +112,109 @@ class RecordsRepositoryTest : WithDatabase {
             prop(PublishResponse::publishedAt).isApproxNow(1.seconds)
         }
     }
+
+
+    @Test
+    fun `should return empty list if not records exist for topic`(): Unit = runBlocking {
+        val polledRecords = dataSource().withTransaction {
+            withLease(topic, consumerGroup, instanceId) {
+                pollRecords(topic, 100, 0)
+            }
+        }
+
+        assertThat(polledRecords).isSuccess().isEmpty()
+    }
+
+    @Test
+    fun `should return first 10 records`(): Unit = runBlocking {
+        val polledRecords = dataSource().withTransaction {
+            insertRecords(50)
+            withLease(topic, consumerGroup, instanceId) {
+                pollRecords(topic, 10, 0)
+            }
+        }
+
+        assertThat(polledRecords).isSuccess()
+            .given {
+                assertThat(it).hasSize(10)
+                assertThat(it.first().sequence).isEqualTo(1)
+                assertThat(it.last().sequence).isEqualTo(10)
+            }
+    }
+
+    @Test
+    fun `should return last 10 records`(): Unit = runBlocking {
+        val polledRecords = dataSource().withTransaction {
+            insertRecords(50)
+            withLease(topic, consumerGroup, instanceId) {
+                pollRecords(topic, 10, 40)
+            }
+        }
+
+        assertThat(polledRecords).isSuccess()
+            .given {
+                assertThat(it).hasSize(10)
+                assertThat(it.first().sequence).isEqualTo(41)
+                assertThat(it.last().sequence).isEqualTo(50)
+            }
+    }
+
+    @Test
+    fun `should return records in ascending order`(): Unit = runBlocking {
+        val offset = 10L
+        val maxRecords = 50
+
+        val polledRecords = dataSource().withTransaction {
+            insertRecords(100)
+            withLease(topic, consumerGroup, instanceId) {
+                pollRecords(topic, maxRecords, offset)
+            }
+        }
+
+        assertThat(polledRecords).isSuccess()
+            .given {
+                assertThat(it).hasSize(maxRecords)
+                assertThat(it.map { record -> record.sequence }).isEqualTo((offset+1..offset + maxRecords).toList())
+            }
+    }
+
+    @Test
+    fun `should return below maxRecords when maxRecords is more than the number of records`(): Unit = runBlocking {
+        val polledRecords = dataSource().withTransaction {
+            insertRecords(5)
+            withLease(topic, consumerGroup, instanceId) {
+                pollRecords(topic, 10, 0)
+            }
+        }
+
+        assertThat(polledRecords).isSuccess()
+            .given {
+                assertThat(it).hasSize(5)
+                assertThat(it.first().sequence).isEqualTo(1)
+                assertThat(it.last().sequence).isEqualTo(5)
+            }
+    }
+
+
+    context(tx: TransactionalSession)
+    private fun insertRecords(count: Int) {
+        repeat(count) {
+            insertRecord(idempotencyKey + it)
+        }
+    }
+
+    context(tx: TransactionalSession)
+    private fun insertRecord(newIdempotencyKey: String = idempotencyKey): Result<PublishResponse> =
+        DbMutex.withLock(TestLock, topic.name) {
+            RecordsRepository.insertRecords(
+                topic = topic,
+                identity = identity,
+                correlationId = Uuid.random(),
+                request = PublishRequest(
+                    idempotencyKey = newIdempotencyKey,
+                    records = listOf(record),
+                ),
+            )
+        }
+
 }

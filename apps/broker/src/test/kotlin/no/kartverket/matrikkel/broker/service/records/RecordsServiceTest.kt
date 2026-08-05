@@ -2,9 +2,12 @@ package no.kartverket.no.kartverket.matrikkel.broker.service.records
 
 import assertk.all
 import assertk.assertThat
+import assertk.assertions.hasSize
+import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
 import assertk.assertions.isLessThan
+import assertk.assertions.isNotEmpty
 import assertk.assertions.isSuccess
 import assertk.assertions.prop
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +21,8 @@ import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.repository.withSession
 import no.kartverket.matrikkel.broker.service.records.Records
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.currentHeadForTopic
+import no.kartverket.matrikkel.kafkaclient.InitialOffsetPolicy
+import no.kartverket.matrikkel.kafkaclient.PollRequest
 import no.kartverket.matrikkel.kafkaclient.PublishRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
@@ -38,25 +43,31 @@ class RecordsServiceTest : WithDatabase {
         )
     )
     val identity = ServiceIdentity("fake-user")
-    val request = PublishRequest(
+    val publishRequest = PublishRequest(
         idempotencyKey = "idempotency_key",
         records = listOf(
             PublishRecord(
-                recordKey = "record_key".toByteArray(),
+                key = "record_key".toByteArray(),
                 payload = "custom payload".toByteArray()
             )
         ),
+    )
+    val pollRequest = PollRequest(
+        maxRecords = 10,
+        consumerGroup = "dummy-group",
+        instanceId = "dummy-instanceId",
+        initialOffsetPolicy = InitialOffsetPolicy.EARLIEST
     )
 
     @Test
     fun `should return existing published record if found`(): Unit = runBlocking {
         val service = Records.ServiceImpl(dataSource())
         val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
-        val first = service.publish(ctx, request)
+        val first = service.publish(ctx, publishRequest)
 
         delay(1.seconds)
 
-        val second = service.publish(ctx, request)
+        val second = service.publish(ctx, publishRequest)
 
         assertThat(first).isSuccess()
         assertThat(second).isEqualTo(first)
@@ -70,13 +81,13 @@ class RecordsServiceTest : WithDatabase {
     fun `should return inserted record`(): Unit = runBlocking {
         val service = Records.ServiceImpl(dataSource())
         val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
-        val first = service.publish(ctx, request)
+        val first = service.publish(ctx, publishRequest)
 
         assertThat(first).isSuccess().given {
             assertThat(it).all {
                 prop(PublishResponse::topic).isEqualTo(topic.name)
                 prop(PublishResponse::sequence).isEqualTo(1)
-                prop(PublishResponse::idempotencyKey).isEqualTo(request.idempotencyKey)
+                prop(PublishResponse::idempotencyKey).isEqualTo(publishRequest.idempotencyKey)
                 prop(PublishResponse::publishedAt).isApproxNow(1.seconds)
             }
         }
@@ -86,8 +97,8 @@ class RecordsServiceTest : WithDatabase {
     fun `should return failure for invalid record keys`(): Unit = runBlocking {
         val service = Records.ServiceImpl(dataSource())
         val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
-        val invalidRequest = request.copy(
-            records = request.records.map { it.copy(recordKey = "1234567890".repeat(30).toByteArray()) }
+        val invalidRequest = publishRequest.copy(
+            records = publishRequest.records.map { it.copy(key = "1234567890".repeat(30).toByteArray()) }
         )
         val result = service.publish(ctx, invalidRequest)
 
@@ -116,7 +127,7 @@ class RecordsServiceTest : WithDatabase {
                                     repeat(numberOfRecordsPerPublish) {
                                         add(
                                             PublishRecord(
-                                                recordKey = "${workerId}-${recordId}".toByteArray(),
+                                                key = "${workerId}-${recordId}".toByteArray(),
                                                 payload = "${workerId}-${recordId}".toByteArray(),
                                             )
                                         )
@@ -143,5 +154,39 @@ class RecordsServiceTest : WithDatabase {
 
         assertThat(heads).isEqualTo(List(numberOfTopics) { (workers * recordsPerWorker).toLong() / numberOfTopics })
         assertThat(timeToInsert).isLessThan(5.seconds) // Around 1sec on OSX M1
+    }
+
+    @Test
+    fun `should return Pollresponse with lease and empty list of records`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+        val pollResponseResult = service.poll(ctx, pollRequest)
+
+
+        assertThat(pollResponseResult).isSuccess()
+            .given {
+                assertThat(it.leaseToken).isNotEmpty()
+                assertThat(it.records).isEmpty()
+            }
+    }
+
+    @Test
+    fun `should return Pollresponse with lease and list of records`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+        service.publish(ctx, publishRequest)
+
+        val pollResponseResult = service.poll(ctx, pollRequest)
+
+
+        assertThat(pollResponseResult).isSuccess()
+            .given {
+                assertThat(it.leaseToken).isNotEmpty()
+                assertThat(it.records).hasSize(1)
+                assertThat(it.records.first().key.contentToString())
+                    .isEqualTo(publishRequest.records.first().key.contentToString())
+                assertThat(it.records.first().payload?.contentToString())
+                    .isEqualTo(publishRequest.records.first().payload?.contentToString())
+            }
     }
 }

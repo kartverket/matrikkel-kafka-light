@@ -2,7 +2,6 @@ package no.kartverket.matrikkel.kafkaclient
 
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
-import kotlin.uuid.Uuid
 
 /**
  * Represents a request/responses going over-the-wire between the clients and the broker
@@ -19,7 +18,7 @@ data class PublishRequest(
 
 @Serializable
 data class PublishRecord(
-    val recordKey: ByteArray,
+    val key: ByteArray,
     val payload: ByteArray?,
 )
 
@@ -37,10 +36,26 @@ enum class InitialOffsetPolicy {
 }
 
 @Serializable
-class PollRequest
+data class PollRequest (
+    val maxRecords: Int,
+    val consumerGroup: String,
+    val instanceId: String,
+    val initialOffsetPolicy: InitialOffsetPolicy,
+)
 
 @Serializable
-class PollResponse
+data class PollRecord(
+    val key: ByteArray,
+    val payload: ByteArray?,
+    val sequence: Long,
+    val publishedAt: Instant,
+)
+
+@Serializable
+data class PollResponse (
+    val records: List<PollRecord>,
+    val leaseToken: String,
+)
 
 @Serializable
 class CommitRequest

@@ -6,6 +6,8 @@ import kotliquery.queryOf
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.repository.DbMutex.DbLockAcquired
+import no.kartverket.matrikkel.broker.service.records.LeaseRepository.LeaseStatus
+import no.kartverket.matrikkel.kafkaclient.PollRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
 import org.intellij.lang.annotations.Language
@@ -66,7 +68,7 @@ object RecordsRepository {
         identity: ServiceIdentity,
         correlationId: Uuid,
         request: PublishRequest,
-        initialSequence: Long = currentHeadForTopic(topic) + 1,
+        initialSequence: Long = currentHeadForTopic(topic),
     ): Result<PublishResponse> {
         @Language("SQL")
         val sql = """
@@ -91,14 +93,13 @@ object RecordsRepository {
             ) ON CONFLICT (topic, record_key, producer_identity, idempotency_key) DO NOTHING
         """.trimIndent()
 
-        val lastRecord = request.records.last()
         var sequence = initialSequence
         val params = request.records.map { record ->
             mapOf(
                 "topic" to topic.name,
-                "sequence" to sequence++,
+                "sequence" to ++sequence,
                 "producer_identity" to identity.value,
-                "record_key" to record.recordKey,
+                "record_key" to record.key,
                 "idempotency_key" to request.idempotencyKey,
                 "correlation_id" to correlationId.toJavaUuid(),
                 "payload" to record.payload,
@@ -120,10 +121,45 @@ object RecordsRepository {
 
             PublishResponse(
                 topic = topic.name,
-                sequence = sequence - 1,
+                sequence = sequence,
                 idempotencyKey = request.idempotencyKey,
                 publishedAt = dbNow,
             )
         }
+    }
+
+    context(tx: Session, _: LeaseStatus.Acquired)
+    fun pollRecords(
+        topic: Topic,
+        maxRecords: Int,
+        offset: Long,
+    ): List<PollRecord> {
+        val paramMapPoll = mapOf(
+            "topic" to topic.name,
+            "sequence" to offset,
+            "maxRecords" to maxRecords
+        )
+
+        @Language("SQL")
+        val query = queryOf(
+            """
+            SELECT record_key, payload, sequence, published_at
+            FROM records
+            WHERE topic = :topic AND sequence > :sequence
+            ORDER BY sequence ASC
+            LIMIT :maxRecords
+        """.trimIndent(), paramMapPoll
+        )
+            .map {
+                PollRecord(
+                    key = it.bytes("record_key"),
+                    payload = it.bytes("payload"),
+                    sequence = it.long("sequence"),
+                    publishedAt = it.instant("published_at").toKotlinInstant()
+                )
+            }
+            .asList
+
+        return tx.run(query)
     }
 }
