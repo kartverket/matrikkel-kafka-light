@@ -75,17 +75,13 @@ class LeaseRepositoryTest : WithDatabase {
                     assertThat(lease.expiresAt).isEqualTo(currentTime + topic.leaseTime + 10.seconds)
                     assertThat(lease.token).isEqualTo(firstLeaseToken)
                 }
-
         }
-
     }
 
     @Test
     fun `should not acquire lease that is taken`(): Unit = runBlocking {
-        // Another instance acquires lease first
         createLease(currentTime)
 
-        // Tries to acquire lease that is taken
         val leaseStatus: LeaseStatus = dataSource().withTransaction {
             acquireLease(
                 topic = topic,
@@ -96,7 +92,6 @@ class LeaseRepositoryTest : WithDatabase {
         }
 
         assertThat(leaseStatus).isInstanceOf(LeaseStatus.Locked::class)
-
     }
 
     @Test
@@ -115,7 +110,6 @@ class LeaseRepositoryTest : WithDatabase {
 
     @Test
     fun `withLease should give failure if lease is taken`(): Unit = runBlocking {
-        // Another instance acquires lease first
         createLease(currentTime)
 
         val leaseResult = dataSource().withTransaction {
@@ -138,8 +132,6 @@ class LeaseRepositoryTest : WithDatabase {
 
     @Test
     fun `should acquire lease that is expired`(): Unit = runBlocking {
-
-        // Creates a lease that is expired
         createLease(currentTime - 2.minutes)
 
         val leaseStatus: LeaseStatus = dataSource().withTransaction {
