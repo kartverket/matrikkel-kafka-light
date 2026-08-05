@@ -2,7 +2,9 @@ package no.kartverket.no.kartverket.matrikkel.broker.api
 
 import assertk.all
 import assertk.assertThat
+import assertk.assertions.hasSize
 import assertk.assertions.isEqualTo
+import assertk.assertions.isNotEmpty
 import assertk.assertions.isNotNull
 import assertk.assertions.prop
 import io.ktor.client.*
@@ -24,6 +26,10 @@ import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
 import no.kartverket.matrikkel.broker.service.records.Records
 import no.kartverket.matrikkel.broker.standardPlugins
+import no.kartverket.matrikkel.kafkaclient.InitialOffsetPolicy
+import no.kartverket.matrikkel.kafkaclient.PollRecord
+import no.kartverket.matrikkel.kafkaclient.PollRequest
+import no.kartverket.matrikkel.kafkaclient.PollResponse
 import no.kartverket.matrikkel.kafkaclient.PublishRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
@@ -56,7 +62,7 @@ class TopicRoutesTest {
             ),
         )
     )
-    val request = PublishRequest(
+    val publishRequest = PublishRequest(
         idempotencyKey = "idempotency_key",
         records = listOf(
             PublishRecord(
@@ -64,6 +70,13 @@ class TopicRoutesTest {
                 payload = "payload".toByteArray(),
             )
         )
+    )
+
+    val pollRequest = PollRequest(
+        maxRecords = 100,
+        consumerGroup = "test-consumer",
+        instanceId = "test-instance_id",
+        initialOffsetPolicy = InitialOffsetPolicy.EARLIEST,
     )
 
     @Nested
@@ -75,7 +88,7 @@ class TopicRoutesTest {
                 val response = client.post("/topics/missing-topic/publish") {
                     header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                     header(HttpHeaders.ContentType, ContentType.Application.Cbor)
-                    setBody(request)
+                    setBody(publishRequest)
                 }
 
                 val result = response.body<ErrorResponse>()
@@ -89,7 +102,7 @@ class TopicRoutesTest {
                 val response = client.post("/topics/test-topic/publish") {
                     header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                     header(HttpHeaders.ContentType, ContentType.Application.Cbor)
-                    setBody(request)
+                    setBody(publishRequest)
                 }
 
                 val result = response.body<ErrorResponse>()
@@ -102,7 +115,7 @@ class TopicRoutesTest {
             topicRouteTest { client, _ ->
                 val response = client.post("/topics/test-topic/publish") {
                     header(HttpHeaders.ContentType, ContentType.Application.Cbor)
-                    setBody(request)
+                    setBody(publishRequest)
                 }
 
                 val result = response.body<ErrorResponse>()
@@ -116,7 +129,7 @@ class TopicRoutesTest {
                 val response = client.post("/topics/locked-topic/publish") {
                     header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                     header(HttpHeaders.ContentType, ContentType.Application.Cbor)
-                    setBody(request)
+                    setBody(publishRequest)
                 }
 
                 val result = response.body<ErrorResponse>()
@@ -130,8 +143,9 @@ class TopicRoutesTest {
                 val response = client.post("/topics/test-topic/publish") {
                     header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                     header(HttpHeaders.ContentType, ContentType.Application.Cbor)
-                    setBody(request.copy(
-                        records = request.records.map { it.copy(key = "".toByteArray()) }
+                    setBody(
+                        publishRequest.copy(
+                        records = publishRequest.records.map { it.copy(key = "".toByteArray()) }
                     ))
                 }
 
@@ -146,7 +160,7 @@ class TopicRoutesTest {
                 val response = client.post("/topics/test-topic/publish") {
                     header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                     header(HttpHeaders.ContentType, ContentType.Application.Cbor)
-                    setBody(request.copy(idempotencyKey = ""))
+                    setBody(publishRequest.copy(idempotencyKey = ""))
                 }
 
                 val result = response.body<ErrorResponse>()
@@ -170,7 +184,7 @@ class TopicRoutesTest {
                 val response = client.post("/topics/test-topic/publish") {
                     header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                     header(HttpHeaders.ContentType, ContentType.Application.Cbor)
-                    setBody(request)
+                    setBody(publishRequest)
                 }
 
                 val result = response.body<PublishResponse>()
@@ -191,7 +205,7 @@ class TopicRoutesTest {
                 val response = client.post("/topics/test-topic/publish") {
                     header(HttpHeaders.XCorrelationId, Uuid.random().toString())
                     header(HttpHeaders.ContentType, ContentType.Application.Cbor)
-                    setBody(request)
+                    setBody(publishRequest)
                 }
 
                 val result = response.body<ErrorResponse>()
@@ -203,8 +217,163 @@ class TopicRoutesTest {
     @Nested
     inner class PollEndpoint {
 
-    }
+        @Test
+        fun `should return error for missing topic`() {
+            topicRouteTest { client, _ ->
+                val response = client.post("/topics/missing-topic/poll") {
+                    header(HttpHeaders.XCorrelationId, Uuid.random().toString())
+                    header(HttpHeaders.ContentType, ContentType.Application.Cbor)
+                    setBody(pollRequest)
+                }
 
+                val result = response.body<ErrorResponse>()
+                assertThat(result.code).isEqualTo("missing_topic")
+            }
+        }
+
+        @Test
+        fun `should return error for missing service identity`() {
+            topicRouteTest(disableAuth = true) { client, _ ->
+                val response = client.post("/topics/test-topic/poll") {
+                    header(HttpHeaders.XCorrelationId, Uuid.random().toString())
+                    header(HttpHeaders.ContentType, ContentType.Application.Cbor)
+                    setBody(pollRequest)
+                }
+
+                val result = response.body<ErrorResponse>()
+                assertThat(result.code).isEqualTo("unauthorized")
+            }
+        }
+
+        @Test
+        fun `should return error for missing correlationId header`() {
+            topicRouteTest { client, _ ->
+                val response = client.post("/topics/test-topic/poll") {
+                    header(HttpHeaders.ContentType, ContentType.Application.Cbor)
+                    setBody(pollRequest)
+                }
+
+                val result = response.body<ErrorResponse>()
+                assertThat(result.code).isEqualTo("invalid_request")
+            }
+        }
+
+        @Test
+        fun `should return forbidding if ACL denies access`() {
+            topicRouteTest { client, _ ->
+                val response = client.post("/topics/locked-topic/poll") {
+                    header(HttpHeaders.XCorrelationId, Uuid.random().toString())
+                    header(HttpHeaders.ContentType, ContentType.Application.Cbor)
+                    setBody(pollRequest)
+                }
+
+                val result = response.body<ErrorResponse>()
+                assertThat(result.code).isEqualTo("forbidden")
+            }
+        }
+
+        @Test
+        fun `should return bad_request if consumerGroup is invalid`() {
+            topicRouteTest { client, _ ->
+                val response = client.post("/topics/test-topic/poll") {
+                    header(HttpHeaders.XCorrelationId, Uuid.random().toString())
+                    header(HttpHeaders.ContentType, ContentType.Application.Cbor)
+                    setBody(pollRequest.copy(consumerGroup = ""))
+                }
+
+                val result = response.body<ErrorResponse>()
+                assertThat(result.code).isEqualTo("invalid_request")
+            }
+        }
+
+        @Test
+        fun `should return bad_request if instanceId is invalid`() {
+            topicRouteTest { client, _ ->
+                val response = client.post("/topics/test-topic/poll") {
+                    header(HttpHeaders.XCorrelationId, Uuid.random().toString())
+                    header(HttpHeaders.ContentType, ContentType.Application.Cbor)
+                    setBody(pollRequest.copy(instanceId = ""))
+                }
+
+                val result = response.body<ErrorResponse>()
+                assertThat(result.code).isEqualTo("invalid_request")
+            }
+        }
+
+        @Test
+        fun `should return bad_request if maxRecords out of range 1 - 1000`() {
+            topicRouteTest { client, _ ->
+                val firstResponse = client.post("/topics/test-topic/poll") {
+                    header(HttpHeaders.XCorrelationId, Uuid.random().toString())
+                    header(HttpHeaders.ContentType, ContentType.Application.Cbor)
+                    setBody(pollRequest.copy(maxRecords = 0))
+                }
+
+                val firstResult = firstResponse.body<ErrorResponse>()
+                assertThat(firstResult.code).isEqualTo("invalid_request")
+
+                val secondResponse = client.post("/topics/test-topic/poll") {
+                    header(HttpHeaders.XCorrelationId, Uuid.random().toString())
+                    header(HttpHeaders.ContentType, ContentType.Application.Cbor)
+                    setBody(pollRequest.copy(maxRecords = 1001))
+                }
+
+                val secondResult = secondResponse.body<ErrorResponse>()
+                assertThat(secondResult.code).isEqualTo("invalid_request")
+            }
+        }
+
+        @Test
+        fun `should return success response from service`() {
+            topicRouteTest { client, mockService ->
+                coEvery { mockService.poll(any(), any()) } returns
+                        Result.success(
+                            PollResponse(
+                                leaseToken = "test-lease-token",
+                                records = listOf(
+                                    PollRecord(
+                                        key = "my-key".encodeToByteArray(),
+                                        payload = "my-value".encodeToByteArray(),
+                                        sequence = 654L,
+                                        publishedAt = Clock.System.now(),
+                                    )
+                                ),
+                            )
+                        )
+
+                val response = client.post("/topics/test-topic/poll") {
+                    header(HttpHeaders.XCorrelationId, Uuid.random().toString())
+                    header(HttpHeaders.ContentType, ContentType.Application.Cbor)
+                    setBody(pollRequest)
+                }
+
+                val result = response.body<PollResponse>()
+                assertThat(result.leaseToken).isNotEmpty()
+                assertThat(result.records).hasSize(1)
+                val firstRecord = result.records.first()
+                assertThat(firstRecord.key.decodeToString()).isEqualTo("my-key")
+                assertThat(firstRecord.payload?.decodeToString()).isEqualTo("my-value")
+                assertThat(firstRecord.sequence).isEqualTo(654L)
+            }
+        }
+
+        @Test
+        fun `should return error response from service`() {
+            topicRouteTest { client, mockService ->
+                coEvery { mockService.poll(any(), any()) } returns
+                        Result.failure(Exception("Something went wrong"))
+
+                val response = client.post("/topics/test-topic/poll") {
+                    header(HttpHeaders.XCorrelationId, Uuid.random().toString())
+                    header(HttpHeaders.ContentType, ContentType.Application.Cbor)
+                    setBody(pollRequest)
+                }
+
+                val result = response.body<ErrorResponse>()
+                assertThat(result.code).isEqualTo("internal_error")
+            }
+        }
+    }
 
 
     private fun topicRouteTest(
