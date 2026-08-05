@@ -21,7 +21,7 @@ object OffsetRepository {
         return getOffset(topic, consumerGroup, initialOffsetPolicy)
     }
 
-    context(tx: TransactionalSession)
+    context(tx: TransactionalSession, _: LeaseStatus.Acquired)
     private fun getOffsetOrNull(
         topic: Topic,
         consumerGroup: String,
@@ -45,7 +45,7 @@ object OffsetRepository {
         return tx.run(query)
     }
 
-    context(tx: TransactionalSession)
+    context(tx: TransactionalSession, _: LeaseStatus.Acquired)
     private fun createOffset(
         topic: Topic,
         consumerGroup: String,
