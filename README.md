@@ -9,7 +9,7 @@ The API's are therefore quite similar, though several simplifications are done. 
 
 ## Overview
 
-The project exists of an broker application, and client library. 
+The project consists of a broker application, and a client library. 
 
 ```mermaid
 flowchart TD
