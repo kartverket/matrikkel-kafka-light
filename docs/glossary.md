@@ -30,7 +30,7 @@ Stands for "**Ser**ialization/**De**serialization", and is responsible for conve
 
 **Partition (OUT-OF-SCOPE)**  
 A subdivision of a topic used in systems such as Kafka to increase parallelism. Partitions are explicitly out of scope because this system requires global ordering within a topic.
-This is not supportert, nor planned for the future.
+This is not supported, nor planned for the future.
 
 ## Actors
 
