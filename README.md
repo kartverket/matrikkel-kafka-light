@@ -87,7 +87,7 @@ sequenceDiagram
 
 ### Consuming records
 
-To produce records it is recommended to use the [MessageConsumer](libs/client/src/main/kotlin/no/kartverket/matrikkel/kafkaclient/MessageConsumer.kt).
+To consume records it is recommended to use the [MessageConsumer](libs/client/src/main/kotlin/no/kartverket/matrikkel/kafkaclient/MessageConsumer.kt).
 
 ```kotlin
 val config = MessageConsumer.Config(
