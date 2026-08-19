@@ -151,7 +151,7 @@ object LeaseRepository {
     }
 
     context(tx: TransactionalSession)
-    private fun getLeaseForConsumerGroup(topic: Topic, consumerGroup: String): Lease? {
+    fun getLeaseForConsumerGroup(topic: Topic, consumerGroup: String): Lease? {
         @Language("SQL")
         val query = queryOf(
             """

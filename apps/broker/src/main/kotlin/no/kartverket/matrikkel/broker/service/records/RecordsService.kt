@@ -1,8 +1,10 @@
 package no.kartverket.matrikkel.broker.service.records
 
+import kotliquery.TransactionalSession
 import no.kartverket.matrikkel.broker.ServiceException
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
+import no.kartverket.matrikkel.broker.isAfter
 import no.kartverket.matrikkel.broker.repository.DbMutex
 import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
@@ -14,6 +16,7 @@ import no.kartverket.matrikkel.broker.service.records.RecordsRepository.insertRe
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.pollRecords
 import no.kartverket.matrikkel.kafkaclient.*
 import javax.sql.DataSource
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 object Records {
@@ -102,7 +105,16 @@ object Records {
             ctx: Service.Ctx,
             request: SeekRequest
         ): Result<SeekResponse> {
-            return Result.failure("seek to ${ctx.topic.name} by ${ctx.identity.value}")
+            return runCatching {
+                dataSource.withTransaction {
+                    require(request.sequence >= 0L) { "Cannot seek to any offset lower than 0" }
+                    requireNoActiveLease(ctx.topic, request.consumerGroup)
+                    requireSequenceNotAheadOfTopic(ctx.topic, request.sequence)
+
+                    OffsetRepository.setOffset(ctx.topic, request.consumerGroup, request.sequence)
+                    SeekResponse()
+                }
+            }
         }
 
         override suspend fun heartbeat(
@@ -110,6 +122,56 @@ object Records {
             request: HeartbeatRequest
         ): Result<HeartbeatResponse> {
             return Result.failure("heartbeat to ${ctx.topic.name} by ${ctx.identity.value}")
+        }
+
+
+        context(tx: TransactionalSession)
+        private fun requireNoActiveLease(
+            topic: Topic,
+            consumerGroup: String,
+        ) {
+            val lease = LeaseRepository.getLeaseForConsumerGroup(topic, consumerGroup)
+            val validLease = when {
+                lease == null -> false
+                lease.token.isEmpty() -> false
+                lease.expiresAt.isAfter(Clock.System.now()) -> false
+                else -> true
+            }
+
+            if (validLease) {
+                throw ServiceException.badRequest(
+                    code = "active_lease",
+                    message = "A current lease prevents seeking for this consumer group"
+                )
+            }
+        }
+
+        context(tx: TransactionalSession, leasestatus: LeaseRepository.LeaseStatus.Acquired)
+        private fun requireSequenceNotLessThanCurrentOffset(topic: Topic, sequence: Long) {
+            val currentOffset = getOffsetOrNull(topic, leasestatus.lease.consumerGroup)
+
+            if (currentOffset == null) {
+                throw ServiceException.badRequest(
+                    code = "premature_commit",
+                    message = "Cannot commit when offset does not exist. Have you polled before commiting?"
+                )
+            } else if (sequence < currentOffset) {
+                throw ServiceException.badRequest(
+                    code = "invalid_commit_sequence",
+                    message = "Offset must be larger then current offset"
+                )
+            }
+        }
+
+        context(tx: TransactionalSession)
+        private fun requireSequenceNotAheadOfTopic(topic: Topic, sequence: Long) {
+            val topicHead = currentHeadForTopic(topic)
+            if (topicHead < sequence) {
+                throw ServiceException.badRequest(
+                    code = "invalid_commit_sequence",
+                    message = "Sequence must not be greater than the topic head"
+                )
+            }
         }
     }
 }

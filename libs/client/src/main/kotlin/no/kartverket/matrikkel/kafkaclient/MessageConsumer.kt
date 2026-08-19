@@ -145,6 +145,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                 client.postCBOR(
                     operation = "seek",
                     body = SeekRequest(
+                        consumerGroup = config.consumerGroup,
                         sequence = sequence
                     )
                 )

@@ -21,11 +21,11 @@ object OffsetRepository {
         return getOffset(topic, consumerGroup, initialOffsetPolicy)
     }
 
-    context(tx: TransactionalSession, leasestatus: LeaseStatus.Acquired)
-    fun setOffset(topic: Topic, offset: Long){
+    context(tx: TransactionalSession)
+    fun setOffset(topic: Topic, consumerGroup: String, offset: Long){
         val params = mapOf(
             "topic" to topic.name,
-            "consumer_group" to leasestatus.lease.consumerGroup,
+            "consumer_group" to consumerGroup,
             "offset" to offset
         )
         @Language("SQL")
