@@ -1,23 +1,14 @@
 package no.kartverket.matrikkel.kafkaclient
 
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.ClientRequestException
-import io.ktor.client.plugins.HttpRequestRetry
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.accept
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.Url
-import io.ktor.http.appendPathSegments
-import io.ktor.http.contentType
-import io.ktor.http.takeFrom
-import io.ktor.serialization.kotlinx.cbor.cbor
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.cbor.*
 import kotlinx.coroutines.delay
 import kotlinx.serialization.cbor.Cbor
 import java.io.Closeable
@@ -86,25 +77,16 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             maxRecords: Int?,
             timeout: Duration?,
         ): ConsumerRecords<TKey, TValue> {
-
-            val correlationId = config.correlationIdProvider()
             val response = try {
-                client.post {
-                    url.takeFrom(config.server)
-                        .appendPathSegments("topics", config.topic, "poll")
-                    header(HttpHeaders.XCorrelationId, correlationId)
-                    accept(ContentType.Application.Cbor)
-                    contentType(ContentType.Application.Cbor)
-                    setBody(
-                        PollRequest(
-                            maxRecords = maxRecords ?: config.maxRecords,
-                            consumerGroup = config.consumerGroup,
-                            instanceId = config.instanceId,
-                            initialOffsetPolicy = config.initialOffsetPolicy,
-                        )
+                client.postCBOR(
+                    operation = "poll",
+                    body = PollRequest(
+                        maxRecords = maxRecords ?: config.maxRecords,
+                        consumerGroup = config.consumerGroup,
+                        instanceId = config.instanceId,
+                        initialOffsetPolicy = config.initialOffsetPolicy,
                     )
-
-                }
+                )
             } catch (e: ClientRequestException) {
                 when (e.response.status) {
                     HttpStatusCode.Locked -> {
@@ -145,6 +127,20 @@ interface MessageConsumer<TKey, TValue> : Closeable {
 
         override fun close() {
             client.close()
+        }
+
+        private suspend inline fun <reified T> HttpClient.postCBOR(
+            operation: String,
+            body: T,
+        ): HttpResponse {
+            return this.post {
+                url.takeFrom(config.server)
+                    .appendPathSegments("topics", config.topic, operation)
+                header(HttpHeaders.XCorrelationId, config.correlationIdProvider())
+                accept(ContentType.Application.Cbor)
+                contentType(ContentType.Application.Cbor)
+                setBody(body)
+            }
         }
     }
 }
