@@ -85,7 +85,7 @@ class OffsetRepositoryTest : WithDatabase {
     fun `should fail is offset does not exist`(): Unit = runBlocking {
         val offset = dataSource().withTransaction {
             withLease(topic, consumerGroup, instanceId) {
-                OffsetRepository.setOffset(topic, 100L)
+                OffsetRepository.setOffset(topic, consumerGroup, 100L)
             }
         }
 
@@ -97,7 +97,7 @@ class OffsetRepositoryTest : WithDatabase {
         val offset = dataSource().withTransaction {
             withLease(topic, consumerGroup, instanceId) {
                 OffsetRepository.getOffset(topic, consumerGroup, InitialOffsetPolicy.EARLIEST)
-                OffsetRepository.setOffset(topic, 100L)
+                OffsetRepository.setOffset(topic, consumerGroup,100L)
                 OffsetRepository.getOffset(topic, consumerGroup, InitialOffsetPolicy.EARLIEST)
             }
         }

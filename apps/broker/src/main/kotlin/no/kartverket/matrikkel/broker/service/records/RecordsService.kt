@@ -4,7 +4,7 @@ import kotliquery.TransactionalSession
 import no.kartverket.matrikkel.broker.ServiceException
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
-import no.kartverket.matrikkel.broker.isAfter
+import no.kartverket.matrikkel.broker.isBefore
 import no.kartverket.matrikkel.broker.repository.DbMutex
 import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
@@ -124,7 +124,7 @@ object Records {
             val validLease = when {
                 lease == null -> false
                 lease.token.isEmpty() -> false
-                lease.expiresAt.isAfter(Clock.System.now()) -> false
+                lease.expiresAt.isBefore(Clock.System.now()) -> false
                 else -> true
             }
 
@@ -148,7 +148,7 @@ object Records {
             } else if (sequence < currentOffset) {
                 throw ServiceException.badRequest(
                     code = "invalid_commit_sequence",
-                    message = "Offset must be larger then current offset"
+                    message = "Sequence must be larger then current offset"
                 )
             }
         }

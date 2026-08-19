@@ -284,5 +284,11 @@ class MessageConsumerTest {
         consumer.seek(13L)
 
         assertThat(consumer.lastDeliveredSequence).isEqualTo(13)
+        val seekRequest = server.takeRequest()
+        val body = seekRequest.responseBody<SeekRequest>()
+
+        assertThat(body.consumerGroup).isEqualTo("test-group")
+        assertThat(body.sequence).isEqualTo(13L)
+
     }
 }
