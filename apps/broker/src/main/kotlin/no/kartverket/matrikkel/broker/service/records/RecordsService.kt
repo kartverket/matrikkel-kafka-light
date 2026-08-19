@@ -1,11 +1,13 @@
 package no.kartverket.matrikkel.broker.service.records
 
+import no.kartverket.matrikkel.broker.ServiceException
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.repository.DbMutex
 import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
 import no.kartverket.matrikkel.broker.service.records.OffsetRepository.getOffset
+import no.kartverket.matrikkel.broker.service.records.OffsetRepository.getOffsetOrNull
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.currentHeadForTopic
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.findExistingPublishedRecord
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.insertRecords
@@ -75,7 +77,25 @@ object Records {
             ctx: Service.Ctx,
             request: CommitRequest
         ): Result<CommitResponse> {
-            return Result.failure("commit to ${ctx.topic.name} by ${ctx.identity.value}")
+            return dataSource.withTransaction {
+                withLease(ctx.topic, request.leaseToken) { lease ->
+                    val currentOffset = getOffsetOrNull(ctx.topic, lease.consumerGroup)
+                    if (currentOffset == null) {
+                        throw ServiceException.badRequest(
+                            code = "premature_commit",
+                            message = "Cannot commit when offset does not exist. Have you polled before commiting?"
+                        )
+                    } else if (currentOffset < request.sequence) {
+                        throw ServiceException.badRequest(
+                            code = "invalid_offset",
+                            message = "Offset must be larger then current offset"
+                        )
+                    } else {
+                        OffsetRepository.setOffset(ctx.topic, request.sequence)
+                        CommitResponse(leaseToken = lease.token)
+                    }
+                }
+            }
         }
 
         override suspend fun seek(
