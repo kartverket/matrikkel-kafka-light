@@ -58,13 +58,20 @@ data class PollResponse (
 )
 
 @Serializable
-class CommitRequest
+data class CommitRequest(
+    val leaseToken: String,
+    val sequence: Long,
+)
 
 @Serializable
-class CommitResponse
+data class CommitResponse(
+    val leaseToken: String,
+)
 
 @Serializable
-class SeekRequest
+data class SeekRequest(
+    val sequence: Long,
+)
 
 @Serializable
 class SeekResponse

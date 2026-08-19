@@ -34,8 +34,8 @@ data class ConsumerRecord<TKey, TValue>(
 
 interface MessageConsumer<TKey, TValue> : Closeable {
     suspend fun poll(maxRecords: Int? = null, timeout: Duration? = null): ConsumerRecords<TKey, TValue>
-    suspend fun commitSync(sequence: Long): CommitResponse
-    suspend fun seek(sequence: Long): SeekResponse
+    suspend fun commitSync()
+    suspend fun seek(sequence: Long)
     suspend fun heartbeat(): HeartbeatResponse
 
     data class Config<TKey, TValue>(
@@ -56,6 +56,8 @@ interface MessageConsumer<TKey, TValue> : Closeable {
         private val config: Config<TKey, TValue>,
     ) : MessageConsumer<TKey, TValue> {
         private var leaseToken: String? = null
+        private var lastDeliveredSequence: Long? = 0
+
         private val client = HttpClient(CIO) {
             expectSuccess = true
             install(ContentNegotiation) {
@@ -98,9 +100,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             }
 
             val responseBody = response.body<PollResponse>()
-            this.leaseToken = responseBody.leaseToken
-
-            return ConsumerRecords(topic = config.topic, records = responseBody.records.map {
+            val records = responseBody.records.map {
                 ConsumerRecord(
                     topic = config.topic,
                     sequence = it.sequence,
@@ -108,17 +108,54 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                     value = it.payload?.let(config.valueSerializer::deserialize),
                     publishedAt = it.publishedAt,
                 )
-            })
+            }
+
+            this.leaseToken = responseBody.leaseToken
+            this.lastDeliveredSequence = records.lastOrNull()?.sequence ?: this.lastDeliveredSequence
+
+            return ConsumerRecords(topic = config.topic, records = records)
 
         }
 
-        override suspend fun commitSync(sequence: Long): CommitResponse {
-            if (leaseToken == null) error("leaseToken is null")
-            TODO("Not yet implemented")
+        override suspend fun commitSync() {
+            val sequence = this.lastDeliveredSequence ?: return
+            val token = this.leaseToken ?: return
+
+            val response = try {
+                client.postCBOR(
+                    operation = "commit",
+                    body = CommitRequest(
+                        leaseToken = token,
+                        sequence = sequence
+                    )
+                )
+            } catch (e: ClientRequestException) {
+                when (e.response.status) {
+                    HttpStatusCode.Locked -> return
+                    else -> throw e
+                }
+            }
+
+            val responseBody = response.body<CommitResponse>()
+            this.leaseToken = responseBody.leaseToken
         }
 
-        override suspend fun seek(sequence: Long): SeekResponse {
-            TODO("Not yet implemented")
+        override suspend fun seek(sequence: Long) {
+            try {
+                client.postCBOR(
+                    operation = "seek",
+                    body = SeekRequest(
+                        sequence = sequence
+                    )
+                )
+            } catch (e: ClientRequestException) {
+                when (e.response.status) {
+                    HttpStatusCode.Locked -> return
+                    else -> throw e
+                }
+            }
+
+            this.lastDeliveredSequence = sequence
         }
 
         override suspend fun heartbeat(): HeartbeatResponse {
