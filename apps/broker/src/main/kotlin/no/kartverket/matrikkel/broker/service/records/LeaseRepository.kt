@@ -1,5 +1,6 @@
 package no.kartverket.matrikkel.broker.service.records
 
+import kotliquery.Row
 import kotliquery.TransactionalSession
 import kotliquery.queryOf
 import no.kartverket.matrikkel.broker.ServiceException
@@ -37,6 +38,25 @@ object LeaseRepository {
     context(tx: TransactionalSession)
     fun <T> withLease(
         topic: Topic,
+        leaseToken: String,
+        now: Instant = Clock.System.now(),
+        fn: context(LeaseStatus.Acquired) (Lease) -> T
+    ): Result<T> {
+        return when(val leaseStatus = getAndRefreshLease(topic, leaseToken, now)) {
+            is LeaseStatus.Locked -> Result.failure(ServiceException.locked(message = "Could not find lease"))
+            is LeaseStatus.Acquired -> {
+                with(leaseStatus) {
+                    runCatching {
+                        fn(lease)
+                    }
+                }
+            }
+        }
+    }
+
+    context(tx: TransactionalSession)
+    fun <T> withLease(
+        topic: Topic,
         consumerGroup: String,
         instanceId: String,
         now: Instant = Clock.System.now(),
@@ -52,6 +72,34 @@ object LeaseRepository {
                 }
             }
         }
+    }
+
+    context(tx: TransactionalSession)
+    fun getAndRefreshLease(
+        topic: Topic,
+        leaseToken: String,
+        now: Instant = Clock.System.now(),
+    ): LeaseStatus {
+        val lease: Lease = getLeaseForLeaseToken(topic, leaseToken) ?: return LeaseStatus.Locked
+
+        val leaseToken = when {
+            lease.token.isEmpty() -> return LeaseStatus.Locked
+            lease.expiresAt.isBefore(now) -> return LeaseStatus.Locked
+            lease.expiresAt.isAfter(now) -> lease.token
+            else -> error("Should never happen")
+        }
+
+        val newLease = Lease(
+            topic = topic.name,
+            consumerGroup = lease.consumerGroup,
+            instanceId = lease.instanceId,
+            token = leaseToken,
+            expiresAt = now + topic.leaseTime
+        )
+
+        updateLease(newLease)
+
+        return LeaseStatus.Acquired(newLease)
     }
 
     context(tx: TransactionalSession)
