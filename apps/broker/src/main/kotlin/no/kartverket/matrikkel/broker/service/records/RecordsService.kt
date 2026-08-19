@@ -82,21 +82,11 @@ object Records {
         ): Result<CommitResponse> {
             return dataSource.withTransaction {
                 withLease(ctx.topic, request.leaseToken) { lease ->
-                    val currentOffset = getOffsetOrNull(ctx.topic, lease.consumerGroup)
-                    if (currentOffset == null) {
-                        throw ServiceException.badRequest(
-                            code = "premature_commit",
-                            message = "Cannot commit when offset does not exist. Have you polled before commiting?"
-                        )
-                    } else if (request.sequence < currentOffset) {
-                        throw ServiceException.badRequest(
-                            code = "invalid_offset",
-                            message = "Offset must be larger then current offset"
-                        )
-                    } else {
-                        OffsetRepository.setOffset(ctx.topic, request.sequence)
-                        CommitResponse(leaseToken = lease.token)
-                    }
+                    requireSequenceNotLessThanCurrentOffset(ctx.topic, request.sequence)
+                    requireSequenceNotAheadOfTopic(ctx.topic, request.sequence)
+
+                    OffsetRepository.setOffset(ctx.topic, lease.consumerGroup, request.sequence)
+                    CommitResponse(leaseToken = lease.token)
                 }
             }
         }
