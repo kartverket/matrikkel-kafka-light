@@ -85,7 +85,7 @@ object Records {
                             code = "premature_commit",
                             message = "Cannot commit when offset does not exist. Have you polled before commiting?"
                         )
-                    } else if (currentOffset < request.sequence) {
+                    } else if (request.sequence < currentOffset) {
                         throw ServiceException.badRequest(
                             code = "invalid_offset",
                             message = "Offset must be larger then current offset"
