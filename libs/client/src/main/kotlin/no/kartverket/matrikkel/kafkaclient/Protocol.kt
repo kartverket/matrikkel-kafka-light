@@ -70,6 +70,7 @@ data class CommitResponse(
 
 @Serializable
 data class SeekRequest(
+    val consumerGroup: String,
     val sequence: Long,
 )
 
