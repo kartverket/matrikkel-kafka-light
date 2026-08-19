@@ -6,12 +6,14 @@ import assertk.assertions.hasSize
 import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
 import assertk.assertions.isInstanceOf
+import assertk.assertions.isNotEqualTo
 import assertk.assertions.isNull
 import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.ServerResponseException
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
@@ -239,5 +241,48 @@ class MessageConsumerTest {
         }.isInstanceOf<ClientRequestException>()
 
         consumer.close()
+    }
+
+    @Test
+    fun `poll keeps track of latest delivered message`(): Unit = runBlocking {
+        server.enqueueCborResponse(pollResponse)
+        server.enqueueCborResponse(CommitResponse("updated-lease-token"))
+        server.start()
+
+        val consumer = MessageConsumer.Impl(config = clientConfig)
+
+        consumer.poll()
+        assertThat(consumer.lastDeliveredSequence).isEqualTo(1)
+    }
+
+    @Test
+    fun `commit uses tracked sequence number, and updates lease`(): Unit = runBlocking {
+        server.enqueueCborResponse(pollResponse)
+        server.enqueueCborResponse(CommitResponse("updated-lease-token"))
+        server.start()
+
+        val consumer = MessageConsumer.Impl(config = clientConfig)
+
+        consumer.poll()
+        assertThat(consumer.leaseToken).isEqualTo("test-lease-token")
+        consumer.commitSync()
+        assertThat(consumer.leaseToken).isEqualTo("updated-lease-token")
+
+        val commitRequest = server.takeRequests(2).last()
+        val body = commitRequest.responseBody<CommitRequest>()
+
+        assertThat(body.leaseToken).isEqualTo("test-lease-token")
+        assertThat(body.sequence).isEqualTo(1)
+    }
+
+    @Test
+    fun `seek updates last delivered`(): Unit = runBlocking {
+        server.enqueueCborResponse(SeekResponse())
+        server.start()
+
+        val consumer = MessageConsumer.Impl(config = clientConfig)
+        consumer.seek(13L)
+
+        assertThat(consumer.lastDeliveredSequence).isEqualTo(13)
     }
 }

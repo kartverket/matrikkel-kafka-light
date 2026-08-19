@@ -19,12 +19,12 @@ import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.LeaseStatus
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.acquireLease
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
+import no.kartverket.no.kartverket.matrikkel.broker.service.records.TestUtils.createLease
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
 import org.junit.jupiter.api.Test
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Instant
 
 class LeaseRepositoryTest : WithDatabase {
     val topic = Topic(
@@ -80,7 +80,7 @@ class LeaseRepositoryTest : WithDatabase {
 
     @Test
     fun `should not acquire lease that is taken`(): Unit = runBlocking {
-        createLease(currentTime)
+        createLease(topic, consumerGroup, currentTime)
 
         val leaseStatus: LeaseStatus = dataSource().withTransaction {
             acquireLease(
@@ -109,8 +109,40 @@ class LeaseRepositoryTest : WithDatabase {
     }
 
     @Test
+    fun `withLease using leaseToken requires a lease to exist`(): Unit = runBlocking {
+        val leaseResult = dataSource().withTransaction {
+            withLease(topic, "leasetoken") {
+                "Lease acquired"
+            }
+        }
+        assertThat(leaseResult).isFailure()
+    }
+
+    @Test
+    fun `withLease using expired leaseToken should fail`(): Unit = runBlocking {
+        val lease = createLease(topic, consumerGroup, currentTime - 2.minutes)
+        val leaseResult = dataSource().withTransaction {
+            withLease(topic, leaseToken = lease.token) {
+                "Lease acquired"
+            }
+        }
+        assertThat(leaseResult).isFailure()
+    }
+
+    @Test
+    fun `withLease using valid leaseToken should work`(): Unit = runBlocking {
+        val lease = createLease(topic, consumerGroup, currentTime)
+        val leaseResult = dataSource().withTransaction {
+            withLease(topic, leaseToken = lease.token) {
+                "Lease acquired"
+            }
+        }
+        assertThat(leaseResult).isSuccess()
+    }
+
+    @Test
     fun `withLease should give failure if lease is taken`(): Unit = runBlocking {
-        createLease(currentTime)
+        createLease(topic, consumerGroup, currentTime)
 
         val leaseResult = dataSource().withTransaction {
             withLease(topic, consumerGroup, "dummy_instance_id") {
@@ -132,7 +164,7 @@ class LeaseRepositoryTest : WithDatabase {
 
     @Test
     fun `should acquire lease that is expired`(): Unit = runBlocking {
-        createLease(currentTime - 2.minutes)
+        createLease(topic, consumerGroup,currentTime - 2.minutes)
 
         val leaseStatus: LeaseStatus = dataSource().withTransaction {
             acquireLease(
@@ -144,17 +176,5 @@ class LeaseRepositoryTest : WithDatabase {
         }
 
         assertThat(leaseStatus).isInstanceOf(LeaseStatus.Acquired::class)
-    }
-
-
-    private suspend fun createLease(time: Instant) {
-        dataSource().withTransaction {
-            acquireLease(
-                topic = topic,
-                consumerGroup = consumerGroup,
-                instanceId = "other_instance_id",
-                now = time,
-            )
-        }
     }
 }

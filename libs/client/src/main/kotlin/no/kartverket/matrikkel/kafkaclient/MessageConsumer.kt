@@ -55,8 +55,8 @@ interface MessageConsumer<TKey, TValue> : Closeable {
     class Impl<TKey, TValue>(
         private val config: Config<TKey, TValue>,
     ) : MessageConsumer<TKey, TValue> {
-        private var leaseToken: String? = null
-        private var lastDeliveredSequence: Long? = 0
+        internal var leaseToken: String? = null
+        internal var lastDeliveredSequence: Long? = 0
 
         private val client = HttpClient(CIO) {
             expectSuccess = true
