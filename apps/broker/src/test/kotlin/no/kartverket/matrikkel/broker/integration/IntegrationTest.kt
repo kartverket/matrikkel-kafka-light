@@ -50,8 +50,7 @@ class IntegrationTest : WithDatabase {
             val producer = producerFactory("first-topic")
             val consumer = consumerFactory("first-topic")
 
-            producer.send(ProducerRecord(key = "record-1", value = "content-1"))
-            delay(200.milliseconds)
+            producer.sendSync(ProducerRecord(key = "record-1", value = "content-1"))
 
             val records = consumer.poll()
             consumer.commitSync()
@@ -114,7 +113,7 @@ class IntegrationTest : WithDatabase {
                         topic = topic,
                         keySerializer = StringSerde,
                         valueSerializer = StringSerde,
-                        correlationIdProvider = { UUID.randomUUID().toString() }
+                        correlationIdProvider = { UUID.randomUUID().toString() },
                     ),
                     client = client
                 )
@@ -138,5 +137,9 @@ class IntegrationTest : WithDatabase {
 
             block(producerFactory, consumerFactory)
         }
+    }
+
+    private suspend fun <TKey, TValue> MessageProducer<TKey, TValue>.sendSync(record: ProducerRecord<TKey, TValue>): Unit {
+        this.send(record).join()
     }
 }
