@@ -1,14 +1,18 @@
-package no.kartverket.no.kartverket.matrikkel.broker.integration
+package no.kartverket.matrikkel.broker.integration
 
 import assertk.assertThat
 import assertk.assertions.hasSize
 import assertk.assertions.isEqualTo
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.request.header
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.cbor.*
 import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.testing.*
-import kotlinx.coroutines.delay
 import kotlinx.serialization.cbor.Cbor
 import no.kartverket.heimdall.common.ktor.plugins.security.Security
 import no.kartverket.matrikkel.broker.api.topicRoutes
@@ -21,10 +25,10 @@ import no.kartverket.matrikkel.kafkaclient.*
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
 import org.junit.jupiter.api.Test
 import java.util.*
-import kotlin.time.Duration.Companion.milliseconds
+import kotlin.io.encoding.Base64
 
-private typealias ProducerFactory = (topic: String) -> MessageProducer<String, String>
-private typealias ConsumerFactory = (topic: String) -> MessageConsumer<String, String>
+private typealias ProducerFactory = (username: String, topic: String) -> MessageProducer<String, String>
+private typealias ConsumerFactory = (username: String, topic: String) -> MessageConsumer<String, String>
 
 class IntegrationTest : WithDatabase {
     val topicCatalog = TopicCatalog(
@@ -47,8 +51,8 @@ class IntegrationTest : WithDatabase {
     @Test
     fun `should be able to publish and consume messages`() {
         runIntegrationTest { producerFactory, consumerFactory ->
-            val producer = producerFactory("first-topic")
-            val consumer = consumerFactory("first-topic")
+            val producer = producerFactory("p1", "first-topic")
+            val consumer = consumerFactory("c1", "first-topic")
 
             producer.sendSync(ProducerRecord(key = "record-1", value = "content-1"))
 
@@ -78,13 +82,12 @@ class IntegrationTest : WithDatabase {
 
         return testApplication {
             install(Authentication) {
-                security.setupMock("fake")
-//                basic("azuread") {
-//                    validate { credentials ->
-//                        val token = JWT.decode(JWT.create().withSubject(credentials.name).sign(Algorithm.none()))
-//                        JWTPrincipal(token)
-//                    }
-//                }
+                basic("azuread") {
+                    validate { credentials ->
+                        val token = JWT.decode(JWT.create().withSubject(credentials.name).sign(Algorithm.none()))
+                        JWTPrincipal(token)
+                    }
+                }
             }
             application {
                 standardPlugins("testing")
@@ -95,18 +98,25 @@ class IntegrationTest : WithDatabase {
                 }
             }
 
-            client = createClient {
-                install(ContentNegotiation) {
-                    cbor(
-                        Cbor {
-                            ignoreUnknownKeys = true
-                            encodeDefaults = true
-                        }
-                    )
+            val clientFactory = { username: String ->
+                createClient {
+                    install(ContentNegotiation) {
+                        cbor(
+                            Cbor {
+                                ignoreUnknownKeys = true
+                                encodeDefaults = true
+                            }
+                        )
+                    }
+
+                    val authHeader = "Basic ${Base64.encode("$username:$username".encodeToByteArray())}"
+                    defaultRequest {
+                        header(HttpHeaders.Authorization, authHeader)
+                    }
                 }
             }
 
-            val producerFactory: ProducerFactory = { topic ->
+            val producerFactory: ProducerFactory = { username, topic ->
                 MessageProducer.Impl(
                     config = MessageProducer.Config(
                         server = Url(""),
@@ -115,11 +125,11 @@ class IntegrationTest : WithDatabase {
                         valueSerializer = StringSerde,
                         correlationIdProvider = { UUID.randomUUID().toString() },
                     ),
-                    client = client
+                    client = clientFactory(username)
                 )
             }
 
-            val consumerFactory: ConsumerFactory = { topic ->
+            val consumerFactory: ConsumerFactory = { username, topic ->
                 MessageConsumer.Impl(
                     config = MessageConsumer.Config(
                         server = Url(""),
@@ -131,7 +141,7 @@ class IntegrationTest : WithDatabase {
                         initialOffsetPolicy = InitialOffsetPolicy.EARLIEST,
                         correlationIdProvider = { UUID.randomUUID().toString() }
                     ),
-                    client = client
+                    client = clientFactory(username)
                 )
             }
 

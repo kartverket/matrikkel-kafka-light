@@ -2,15 +2,11 @@ package no.kartverket.matrikkel.kafkaclient
 
 import io.ktor.client.*
 import io.ktor.client.call.*
-import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
-import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.cbor.*
 import kotlinx.coroutines.delay
-import kotlinx.serialization.cbor.Cbor
 import java.io.Closeable
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -24,6 +20,7 @@ data class ConsumerRecords<TKey, TValue>(
     val topic: String,
     val records: List<ConsumerRecord<TKey, TValue>>,
 )
+
 data class ConsumerRecord<TKey, TValue>(
     val topic: String,
     val sequence: Long,
@@ -40,6 +37,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
 
     data class Config<TKey, TValue>(
         val server: Url,
+        val authentication: ClientAuthentication? = null,
         val topic: String,
         val keySerializer: Serde<TKey>,
         val valueSerializer: Serde<TValue>,
@@ -54,7 +52,10 @@ interface MessageConsumer<TKey, TValue> : Closeable {
 
     class Impl<TKey, TValue>(
         private val config: Config<TKey, TValue>,
-        private val client: HttpClient = createHttpClient(maxRetries = config.maxRetries),
+        private val client: HttpClient = createHttpClient(
+            maxRetries = config.maxRetries,
+            authentication = config.authentication,
+        ),
     ) : MessageConsumer<TKey, TValue> {
         internal var leaseToken: String? = null
         internal var lastDeliveredSequence: Long? = 0
@@ -79,6 +80,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                         delay(timeout ?: config.timeout)
                         return ConsumerRecords(topic = config.topic, records = emptyList())
                     }
+
                     else -> throw e
                 }
             }

@@ -1,15 +1,10 @@
 package no.kartverket.matrikkel.kafkaclient
 
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.*
-import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.cbor.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.serialization.cbor.Cbor
 import java.io.Closeable
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -29,6 +24,7 @@ interface MessageProducer<TKey, TValue> : Closeable {
 
     data class Config<TKey, TValue>(
         val server: Url,
+        val authentication: ClientAuthentication? = null,
         val topic: String,
         val keySerializer: Serde<TKey>,
         val valueSerializer: Serde<TValue>,
@@ -41,7 +37,10 @@ interface MessageProducer<TKey, TValue> : Closeable {
     class Impl<TKey, TValue>(
         private val config: Config<TKey, TValue>,
         private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-        private val client: HttpClient = createHttpClient(maxRetries = config.maxRetries),
+        private val client: HttpClient = createHttpClient(
+            maxRetries = config.maxRetries,
+            authentication = config.authentication,
+        ),
     ) : MessageProducer<TKey, TValue> {
         private data class PendingRecord(
             val record: PublishRecord,
@@ -100,7 +99,7 @@ interface MessageProducer<TKey, TValue> : Closeable {
             try {
                 httpPublish(batch.map(PendingRecord::record))
                 batch.forEach { it.result.complete(Unit) }
-            } catch(ex: Exception) {
+            } catch (ex: Exception) {
                 batch.forEach { it.result.completeExceptionally(ex) }
             }
         }
