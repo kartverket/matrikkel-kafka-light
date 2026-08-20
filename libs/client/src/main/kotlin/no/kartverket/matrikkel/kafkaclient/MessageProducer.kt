@@ -41,6 +41,7 @@ interface MessageProducer<TKey, TValue> : Closeable {
     class Impl<TKey, TValue>(
         private val config: Config<TKey, TValue>,
         private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        private val client: HttpClient = createHttpClient(maxRetries = config.maxRetries),
     ) : MessageProducer<TKey, TValue> {
         private data class PendingRecord(
             val record: PublishRecord,
@@ -48,22 +49,6 @@ interface MessageProducer<TKey, TValue> : Closeable {
         )
 
         private val queue = Channel<PendingRecord>(capacity = Channel.UNLIMITED)
-        private val client = HttpClient(CIO) {
-            expectSuccess = true
-            install(ContentNegotiation) {
-                cbor(
-                    Cbor {
-                        ignoreUnknownKeys = true
-                        encodeDefaults = true
-                    }
-                )
-            }
-
-            install(HttpRequestRetry) {
-                retryOnServerErrors(maxRetries = config.maxRetries)
-                exponentialDelay()
-            }
-        }
 
         private val senderJob = scope.launch {
             while (true) {

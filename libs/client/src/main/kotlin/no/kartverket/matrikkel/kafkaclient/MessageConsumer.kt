@@ -54,26 +54,10 @@ interface MessageConsumer<TKey, TValue> : Closeable {
 
     class Impl<TKey, TValue>(
         private val config: Config<TKey, TValue>,
+        private val client: HttpClient = createHttpClient(maxRetries = config.maxRetries),
     ) : MessageConsumer<TKey, TValue> {
         internal var leaseToken: String? = null
         internal var lastDeliveredSequence: Long? = 0
-
-        private val client = HttpClient(CIO) {
-            expectSuccess = true
-            install(ContentNegotiation) {
-                cbor(
-                    Cbor {
-                        ignoreUnknownKeys = true
-                        encodeDefaults = true
-                    }
-                )
-            }
-
-            install(HttpRequestRetry) {
-                retryOnServerErrors(maxRetries = config.maxRetries)
-                exponentialDelay()
-            }
-        }
 
         override suspend fun poll(
             maxRecords: Int?,
