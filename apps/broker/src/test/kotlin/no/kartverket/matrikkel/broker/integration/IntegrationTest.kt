@@ -1,9 +1,11 @@
 package no.kartverket.matrikkel.broker.integration
 
+import assertk.all
 import assertk.assertThat
 import assertk.assertions.each
 import assertk.assertions.hasSize
 import assertk.assertions.isEqualTo
+import assertk.assertions.isLessThan
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import io.ktor.client.plugins.*
@@ -28,7 +30,11 @@ import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
 import org.junit.jupiter.api.Test
 import java.util.*
 import kotlin.io.encoding.Base64
+import kotlin.math.min
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.measureTime
+import kotlin.time.measureTimedValue
 
 private typealias ProducerFactory = (username: String, topic: String) -> MessageProducer<String, String>
 private typealias ConsumerFactory = (username: String, topic: String) -> MessageConsumer<String, String>
@@ -68,6 +74,63 @@ class IntegrationTest : WithDatabase {
 
             assertThat(records.records).hasSize(1)
             assertThat(records.records.first().value).isEqualTo("content-1")
+        }
+    }
+
+    @Test
+    fun `throughput test (10k records in two topics)`() {
+        val messagesPerClient = 10_000
+        val producerIds = listOf("p1" to "first-topic", "p2" to "second-topic")
+        val consumerIds = listOf("c1" to "first-topic", "c2" to "second-topic")
+
+        runIntegrationTest { producerFactory, consumerFactory ->
+            val startupSignal = CompletableDeferred<Unit>()
+
+            val producers = producerIds.map { (id, topic) ->
+                launch(Dispatchers.IO) {
+                    val producer = producerFactory(id, topic)
+                    startupSignal.await()
+
+                    producer.produceMessages {
+                        repeat(messagesPerClient) {
+                            yield(ProducerRecord("$id-$it", "$id-$it"))
+                        }
+                    }
+
+                    producer.close()
+                }
+            }
+
+            val consumers = consumerIds.map { (id, topic) ->
+                async(Dispatchers.IO) {
+                    val consumer = consumerFactory(id, topic)
+                    startupSignal.await()
+                    consumer.use { it.consumeMessages(messagesPerClient) }
+                }
+            }
+
+            val (records, duration) = measureTimedValue {
+                startupSignal.complete(Unit)
+
+                joinAll(*producers.toTypedArray())
+                awaitAll(*consumers.toTypedArray())
+            }
+
+            assertThat(records).each { recordsAssert ->
+                recordsAssert
+                    .transform { list -> list.map { it.sequence } }
+                    .all {
+                        hasSize(messagesPerClient)
+                        isEqualTo((1L..messagesPerClient.toLong()).toList())
+                    }
+            }
+
+
+            val numberOfRecords = records.sumOf { it.size }
+            // Should be approx: Processed 20000 in ~2s
+            println("Processed $numberOfRecords in $duration")
+
+            assertThat(duration).isLessThan(5.seconds)
         }
     }
 
@@ -149,7 +212,7 @@ class IntegrationTest : WithDatabase {
     private suspend fun MessageConsumer<String, String>.consumeMessages(n: Int): List<ConsumerRecord<String, String>> {
         val records = mutableListOf<ConsumerRecord<String, String>>()
         do {
-            val response = this.poll(maxRecords = n - records.size)
+            val response = this.poll(maxRecords = min(1000, n - records.size))
             records.addAll(response.records)
             this.commitSync()
         } while (records.size < n)
