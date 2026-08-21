@@ -109,13 +109,18 @@ object LeaseRepository {
         instanceId: String,
         now: Instant = Clock.System.now(),
     ): LeaseStatus {
-        val lease: Lease? = getLeaseForConsumerGroup(topic, consumerGroup)
+        var lease: Lease? = getLeaseForConsumerGroup(topic, consumerGroup)
 
         if (lease == null) {
             // For å sikre at bare en konsument har mulighet til å få en lease taes det en eksplisitt lås her
             // Dette fordi "SELECT ... FOR UPDATE" ikke kan fungere når det ikke eksisterer en rad i tabellen å låse på.
             DbMutex.lock(CreateLeaseEntryLock, topic.name + consumerGroup)
-            createLease(topic, consumerGroup)
+
+            // Another transaction may have created it while we waited.
+            lease = getLeaseForConsumerGroup(topic, consumerGroup)
+            if (lease == null) {
+                createLease(topic, consumerGroup)
+            }
 
             // Raden som kan låses på er satt inn, så da kan vi kalle oss selv på nytt.
             return acquireLease(topic, consumerGroup, instanceId, now)

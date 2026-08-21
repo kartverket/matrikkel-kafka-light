@@ -11,6 +11,10 @@ import assertk.assertions.isNotNull
 import assertk.assertions.isSuccess
 import assertk.assertions.prop
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import no.kartverket.matrikkel.broker.ServiceException
 import no.kartverket.matrikkel.broker.domain.Topic
@@ -19,6 +23,7 @@ import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.LeaseStatus
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.acquireLease
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
+import no.kartverket.matrikkel.broker.testutils.CyclicBarrier
 import no.kartverket.no.kartverket.matrikkel.broker.service.records.TestUtils.createLease
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
 import org.junit.jupiter.api.Test
@@ -176,5 +181,43 @@ class LeaseRepositoryTest : WithDatabase {
         }
 
         assertThat(leaseStatus).isInstanceOf(LeaseStatus.Acquired::class)
+    }
+
+    @Test
+    fun `concurrent instances should result in one acquired and one locked lease`(): Unit = runBlocking {
+        val instances = listOf("instance-1", "instance-2")
+
+        // Repeating makes the concurrency regression much more likely to catch
+        // implementations that contain a check-then-insert race.
+        repeat(20) { attempt ->
+            val barrier = CyclicBarrier(parties = instances.size)
+            val attemptGroup = "$consumerGroup-$attempt"
+
+            val results = coroutineScope {
+                val acquisitions = instances.map { instanceId ->
+                    async(Dispatchers.IO) {
+                        dataSource().withTransaction {
+                            barrier.await()
+
+                            acquireLease(
+                                topic = topic,
+                                consumerGroup = attemptGroup,
+                                instanceId = instanceId,
+                                now = currentTime,
+                            )
+                        }
+                    }
+                }
+
+                acquisitions.awaitAll()
+            }
+
+
+            val acquiredLeases = results.count { it is LeaseStatus.Acquired }
+            val lockedLeases = results.count { it is LeaseStatus.Locked }
+
+            assertThat(acquiredLeases).isEqualTo(1)
+            assertThat(lockedLeases).isEqualTo(1)
+        }
     }
 }
