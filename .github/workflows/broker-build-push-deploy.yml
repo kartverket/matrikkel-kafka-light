@@ -6,6 +6,7 @@ on:
       - .github/workflows/**
       - .skip/**
       - apps/broker/**
+      - libs/client/**
       - buildSrc/**
       - gradle/libs.versions.toml
       - settings.gradle.kts
