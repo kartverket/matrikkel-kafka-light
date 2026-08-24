@@ -4,6 +4,8 @@ import assertk.assertFailure
 import assertk.assertThat
 import assertk.assertions.hasSize
 import assertk.assertions.isEqualTo
+import assertk.assertions.isInstanceOf
+import io.ktor.client.plugins.*
 import io.ktor.http.*
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
@@ -265,6 +267,42 @@ class MessageProducerTest {
         assertThat(body.records.single().payload!!.decodeToString()).isEqualTo("value-1")
 
         producer.close()
+    }
+
+    @Test
+    fun `should throw standard ktor-error if deserialization of ErrorResponse fails`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(400))
+        server.start()
+
+        val producer = MessageProducer.Impl(clientConfig())
+
+        assertFailure {
+            producer.send(
+                ProducerRecord(
+                    key = "key-1",
+                    value = "value-1",
+                )
+            ).await()
+        }.isInstanceOf<ClientRequestException>()
+
+        producer.close()
+    }
+
+    @Test
+    fun `should throw KafkaClientException when response can be deserialized`() = runTest {
+        server.enqueueCborResponse(ErrorResponse("TEST-01", "Something was wrong"), code = 403)
+        server.start()
+
+        val producer = MessageProducer.Impl(clientConfig())
+
+        assertFailure {
+            producer.send(
+                ProducerRecord(
+                    key = "key-1",
+                    value = "value-1",
+                )
+            ).await()
+        }.isInstanceOf<KafkaClientException>()
     }
 
     @Test

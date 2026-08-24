@@ -1,23 +1,22 @@
 package no.kartverket.matrikkel.broker.integration
 
 import assertk.all
+import assertk.assertFailure
 import assertk.assertThat
 import assertk.assertions.each
+import assertk.assertions.hasMessage
 import assertk.assertions.hasSize
 import assertk.assertions.isEqualTo
 import assertk.assertions.isLessThan
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import io.ktor.client.plugins.*
-import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.cbor.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.*
-import kotlinx.serialization.cbor.Cbor
 import no.kartverket.heimdall.common.ktor.plugins.security.Security
 import no.kartverket.matrikkel.broker.api.topicRoutes
 import no.kartverket.matrikkel.broker.domain.Topic
@@ -31,9 +30,7 @@ import org.junit.jupiter.api.Test
 import java.util.*
 import kotlin.io.encoding.Base64
 import kotlin.math.min
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.measureTime
 import kotlin.time.measureTimedValue
 
 private typealias ProducerFactory = (username: String, topic: String) -> MessageProducer<String, String>
@@ -200,6 +197,23 @@ class IntegrationTest : WithDatabase {
         }
     }
 
+    @Test
+    fun `returns forbidden if consumer-producers tries to access topic`() {
+        runIntegrationTest { producerFactory, consumerFactory ->
+            producerFactory("illegal", "second-topic").use {
+                assertFailure {
+                    it.sendSync(ProducerRecord("key", "value"))
+                }.hasMessage("Service identity not authorized to execute command on this topic")
+            }
+
+            consumerFactory("illegal", "second-topic").use {
+                assertFailure {
+                    it.poll()
+                }.hasMessage("Service identity not authorized to execute command on this topic")
+            }
+        }
+    }
+
     private suspend fun MessageProducer<String, String>.produceMessages(
         block: suspend SequenceScope<ProducerRecord<String, String>>.() -> Unit
     ): MessageProducer<String, String> {
@@ -252,16 +266,7 @@ class IntegrationTest : WithDatabase {
 
             val clientFactory = { username: String ->
                 createClient {
-                    expectSuccess = true
-
-                    install(ContentNegotiation) {
-                        cbor(
-                            Cbor {
-                                ignoreUnknownKeys = true
-                                encodeDefaults = true
-                            }
-                        )
-                    }
+                    standardConfig()
 
                     val authHeader = "Basic ${Base64.encode("$username:$username".encodeToByteArray())}"
                     defaultRequest {
@@ -307,6 +312,6 @@ class IntegrationTest : WithDatabase {
     }
 
     private suspend fun <TKey, TValue> MessageProducer<TKey, TValue>.sendSync(record: ProducerRecord<TKey, TValue>): Unit {
-        this.send(record).join()
+        this.send(record).await()
     }
 }

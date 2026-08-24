@@ -4,7 +4,7 @@ import io.ktor.http.*
 import io.ktor.server.plugins.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.response.*
-import kotlinx.serialization.Serializable
+import no.kartverket.matrikkel.kafkaclient.ErrorResponse
 import org.slf4j.LoggerFactory
 
 fun StatusPagesConfig.configureExceptionHandling() {
@@ -36,12 +36,6 @@ fun StatusPagesConfig.configureExceptionHandling() {
         )
     }
 }
-
-@Serializable
-data class ErrorResponse(
-    val code: String,
-    val message: String,
-)
 
 class ServiceException(
     val status: HttpStatusCode,

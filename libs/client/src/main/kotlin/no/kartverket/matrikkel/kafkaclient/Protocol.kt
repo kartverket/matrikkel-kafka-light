@@ -11,6 +11,12 @@ import kotlin.time.Instant
  */
 
 @Serializable
+data class ErrorResponse(
+    val code: String,
+    val message: String,
+)
+
+@Serializable
 data class PublishRequest(
     val idempotencyKey: String,
     val records: List<PublishRecord>,

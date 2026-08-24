@@ -6,7 +6,6 @@ import assertk.assertions.hasSize
 import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
 import assertk.assertions.isInstanceOf
-import assertk.assertions.isNotEqualTo
 import assertk.assertions.isNull
 import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.ServerResponseException
@@ -164,7 +163,7 @@ class MessageConsumerTest {
 
     @Test
     fun `should wait for default timeout if locked and return empty list`() = runTest {
-        server.enqueue(MockResponse().setResponseCode(HttpStatusCode.Locked.value))
+        server.enqueueCborResponse(ErrorResponse("locked", "Could not acquire lease"), code = HttpStatusCode.Locked.value)
         server.start()
 
         val consumer = MessageConsumer.Impl(config = clientConfig)
@@ -179,7 +178,7 @@ class MessageConsumerTest {
 
     @Test
     fun `should wait for provided timeout instead of config default when locked`() = runTest {
-        server.enqueue(MockResponse().setResponseCode(HttpStatusCode.Locked.value))
+        server.enqueueCborResponse(ErrorResponse("locked", "Could not acquire lease"), code = HttpStatusCode.Locked.value)
         server.start()
 
         val consumer = MessageConsumer.Impl(config = clientConfig)
@@ -230,7 +229,7 @@ class MessageConsumerTest {
     }
 
     @Test
-    fun `should throw error on 400-errors other than 423-locked`() = runTest {
+    fun `should throw standard ktor-error if deserialization of ErrorResponse fails`() = runTest {
         server.enqueue(MockResponse().setResponseCode(400))
         server.start()
 
@@ -241,6 +240,18 @@ class MessageConsumerTest {
         }.isInstanceOf<ClientRequestException>()
 
         consumer.close()
+    }
+
+    @Test
+    fun `should throw error on 400-errors other than 423-locked`() = runTest {
+        server.enqueueCborResponse(ErrorResponse("TEST-01", "Something was wrong"), code = 403)
+        server.start()
+
+        MessageConsumer.Impl(config = clientConfig).use { consumer ->
+            assertFailure {
+                consumer.poll()
+            }.isInstanceOf<KafkaClientException>()
+        }
     }
 
     @Test

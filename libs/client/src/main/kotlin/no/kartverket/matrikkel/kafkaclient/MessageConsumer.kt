@@ -2,7 +2,6 @@ package no.kartverket.matrikkel.kafkaclient
 
 import io.ktor.client.*
 import io.ktor.client.call.*
-import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -74,8 +73,8 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                         initialOffsetPolicy = config.initialOffsetPolicy,
                     )
                 )
-            } catch (e: ClientRequestException) {
-                when (e.response.status) {
+            } catch (e: KafkaClientException) {
+                when (e.status) {
                     HttpStatusCode.Locked -> {
                         delay(timeout ?: config.timeout)
                         return ConsumerRecords(topic = config.topic, records = emptyList())
@@ -115,8 +114,8 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                         sequence = sequence
                     )
                 )
-            } catch (e: ClientRequestException) {
-                when (e.response.status) {
+            } catch (e: KafkaClientException) {
+                when (e.status) {
                     HttpStatusCode.Locked -> return
                     else -> throw e
                 }
@@ -135,8 +134,8 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                         sequence = sequence
                     )
                 )
-            } catch (e: ClientRequestException) {
-                when (e.response.status) {
+            } catch (e: KafkaClientException) {
+                when (e.status) {
                     HttpStatusCode.Locked -> return
                     else -> throw e
                 }

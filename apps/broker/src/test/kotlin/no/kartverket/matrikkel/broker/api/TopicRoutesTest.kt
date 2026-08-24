@@ -19,13 +19,13 @@ import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.serialization.cbor.Cbor
 import no.kartverket.heimdall.common.ktor.plugins.security.Security
-import no.kartverket.matrikkel.broker.ErrorResponse
 import no.kartverket.matrikkel.broker.api.topicRoutes
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
 import no.kartverket.matrikkel.broker.service.records.Records
 import no.kartverket.matrikkel.broker.standardPlugins
+import no.kartverket.matrikkel.kafkaclient.ErrorResponse
 import no.kartverket.matrikkel.kafkaclient.InitialOffsetPolicy
 import no.kartverket.matrikkel.kafkaclient.PollRecord
 import no.kartverket.matrikkel.kafkaclient.PollRequest
@@ -417,4 +417,3 @@ class TopicRoutesTest {
         }
     }
 }
-
