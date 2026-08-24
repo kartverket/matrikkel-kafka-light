@@ -11,6 +11,12 @@ import kotlin.time.Instant
  */
 
 @Serializable
+data class ErrorResponse(
+    val code: String,
+    val message: String,
+)
+
+@Serializable
 data class PublishRequest(
     val idempotencyKey: String,
     val records: List<PublishRecord>,
@@ -58,13 +64,21 @@ data class PollResponse (
 )
 
 @Serializable
-class CommitRequest
+data class CommitRequest(
+    val leaseToken: String,
+    val sequence: Long,
+)
 
 @Serializable
-class CommitResponse
+data class CommitResponse(
+    val leaseToken: String,
+)
 
 @Serializable
-class SeekRequest
+data class SeekRequest(
+    val consumerGroup: String,
+    val sequence: Long,
+)
 
 @Serializable
 class SeekResponse

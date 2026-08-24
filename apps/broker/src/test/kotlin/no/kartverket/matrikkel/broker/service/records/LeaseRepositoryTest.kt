@@ -11,6 +11,10 @@ import assertk.assertions.isNotNull
 import assertk.assertions.isSuccess
 import assertk.assertions.prop
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import no.kartverket.matrikkel.broker.ServiceException
 import no.kartverket.matrikkel.broker.domain.Topic
@@ -19,12 +23,13 @@ import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.LeaseStatus
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.acquireLease
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
+import no.kartverket.matrikkel.broker.testutils.CyclicBarrier
+import no.kartverket.no.kartverket.matrikkel.broker.service.records.TestUtils.createLease
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
 import org.junit.jupiter.api.Test
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Instant
 
 class LeaseRepositoryTest : WithDatabase {
     val topic = Topic(
@@ -80,7 +85,7 @@ class LeaseRepositoryTest : WithDatabase {
 
     @Test
     fun `should not acquire lease that is taken`(): Unit = runBlocking {
-        createLease(currentTime)
+        createLease(topic, consumerGroup, currentTime)
 
         val leaseStatus: LeaseStatus = dataSource().withTransaction {
             acquireLease(
@@ -109,8 +114,40 @@ class LeaseRepositoryTest : WithDatabase {
     }
 
     @Test
+    fun `withLease using leaseToken requires a lease to exist`(): Unit = runBlocking {
+        val leaseResult = dataSource().withTransaction {
+            withLease(topic, "leasetoken") {
+                "Lease acquired"
+            }
+        }
+        assertThat(leaseResult).isFailure()
+    }
+
+    @Test
+    fun `withLease using expired leaseToken should fail`(): Unit = runBlocking {
+        val lease = createLease(topic, consumerGroup, currentTime - 2.minutes)
+        val leaseResult = dataSource().withTransaction {
+            withLease(topic, leaseToken = lease.token) {
+                "Lease acquired"
+            }
+        }
+        assertThat(leaseResult).isFailure()
+    }
+
+    @Test
+    fun `withLease using valid leaseToken should work`(): Unit = runBlocking {
+        val lease = createLease(topic, consumerGroup, currentTime)
+        val leaseResult = dataSource().withTransaction {
+            withLease(topic, leaseToken = lease.token) {
+                "Lease acquired"
+            }
+        }
+        assertThat(leaseResult).isSuccess()
+    }
+
+    @Test
     fun `withLease should give failure if lease is taken`(): Unit = runBlocking {
-        createLease(currentTime)
+        createLease(topic, consumerGroup, currentTime)
 
         val leaseResult = dataSource().withTransaction {
             withLease(topic, consumerGroup, "dummy_instance_id") {
@@ -132,7 +169,7 @@ class LeaseRepositoryTest : WithDatabase {
 
     @Test
     fun `should acquire lease that is expired`(): Unit = runBlocking {
-        createLease(currentTime - 2.minutes)
+        createLease(topic, consumerGroup,currentTime - 2.minutes)
 
         val leaseStatus: LeaseStatus = dataSource().withTransaction {
             acquireLease(
@@ -146,15 +183,41 @@ class LeaseRepositoryTest : WithDatabase {
         assertThat(leaseStatus).isInstanceOf(LeaseStatus.Acquired::class)
     }
 
+    @Test
+    fun `concurrent instances should result in one acquired and one locked lease`(): Unit = runBlocking {
+        val instances = listOf("instance-1", "instance-2")
 
-    private suspend fun createLease(time: Instant) {
-        dataSource().withTransaction {
-            acquireLease(
-                topic = topic,
-                consumerGroup = consumerGroup,
-                instanceId = "other_instance_id",
-                now = time,
-            )
+        // Repeating makes the concurrency regression much more likely to catch
+        // implementations that contain a check-then-insert race.
+        repeat(20) { attempt ->
+            val barrier = CyclicBarrier(parties = instances.size)
+            val attemptGroup = "$consumerGroup-$attempt"
+
+            val results = coroutineScope {
+                val acquisitions = instances.map { instanceId ->
+                    async(Dispatchers.IO) {
+                        dataSource().withTransaction {
+                            barrier.await()
+
+                            acquireLease(
+                                topic = topic,
+                                consumerGroup = attemptGroup,
+                                instanceId = instanceId,
+                                now = currentTime,
+                            )
+                        }
+                    }
+                }
+
+                acquisitions.awaitAll()
+            }
+
+
+            val acquiredLeases = results.count { it is LeaseStatus.Acquired }
+            val lockedLeases = results.count { it is LeaseStatus.Locked }
+
+            assertThat(acquiredLeases).isEqualTo(1)
+            assertThat(lockedLeases).isEqualTo(1)
         }
     }
 }

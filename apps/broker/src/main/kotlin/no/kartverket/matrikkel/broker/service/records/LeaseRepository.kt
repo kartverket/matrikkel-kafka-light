@@ -1,5 +1,6 @@
 package no.kartverket.matrikkel.broker.service.records
 
+import kotliquery.Row
 import kotliquery.TransactionalSession
 import kotliquery.queryOf
 import no.kartverket.matrikkel.broker.ServiceException
@@ -37,6 +38,25 @@ object LeaseRepository {
     context(tx: TransactionalSession)
     fun <T> withLease(
         topic: Topic,
+        leaseToken: String,
+        now: Instant = Clock.System.now(),
+        fn: context(LeaseStatus.Acquired) (Lease) -> T
+    ): Result<T> {
+        return when(val leaseStatus = getAndRefreshLease(topic, leaseToken, now)) {
+            is LeaseStatus.Locked -> Result.failure(ServiceException.locked(message = "Could not find lease"))
+            is LeaseStatus.Acquired -> {
+                with(leaseStatus) {
+                    runCatching {
+                        fn(lease)
+                    }
+                }
+            }
+        }
+    }
+
+    context(tx: TransactionalSession)
+    fun <T> withLease(
+        topic: Topic,
         consumerGroup: String,
         instanceId: String,
         now: Instant = Clock.System.now(),
@@ -55,53 +75,52 @@ object LeaseRepository {
     }
 
     context(tx: TransactionalSession)
+    fun getAndRefreshLease(
+        topic: Topic,
+        leaseToken: String,
+        now: Instant = Clock.System.now(),
+    ): LeaseStatus {
+        val lease: Lease = getLeaseForLeaseToken(topic, leaseToken) ?: return LeaseStatus.Locked
+
+        val leaseToken = when {
+            lease.token.isEmpty() -> return LeaseStatus.Locked
+            lease.expiresAt.isBefore(now) -> return LeaseStatus.Locked
+            lease.expiresAt.isAfter(now) -> lease.token
+            else -> error("Should never happen")
+        }
+
+        val newLease = Lease(
+            topic = topic.name,
+            consumerGroup = lease.consumerGroup,
+            instanceId = lease.instanceId,
+            token = leaseToken,
+            expiresAt = now + topic.leaseTime
+        )
+
+        updateLease(newLease)
+
+        return LeaseStatus.Acquired(newLease)
+    }
+
+    context(tx: TransactionalSession)
     fun acquireLease(
         topic: Topic,
         consumerGroup: String,
         instanceId: String,
         now: Instant = Clock.System.now(),
     ): LeaseStatus {
-
-        val paramMapTopicConsumer = mapOf(
-            "topic" to topic.name,
-            "consumer_group" to consumerGroup,
-        )
-
-        @Language("SQL")
-        val query = queryOf(
-            """
-            SELECT topic, consumer_group,instance_id, token, expires_at
-            FROM consumer_leases
-            WHERE topic = :topic AND consumer_group = :consumer_group
-            FOR UPDATE
-        """.trimIndent(), paramMapTopicConsumer
-        )
-            .map {
-                Lease(
-                    topic = it.string("topic"),
-                    consumerGroup = it.string("consumer_group"),
-                    instanceId = it.string("instance_id"),
-                    token = it.string("token"),
-                    expiresAt = it.instant("expires_at").toKotlinInstant()
-                )
-            }
-            .asSingle
-
-        val lease: Lease? = tx.run(query)
+        var lease: Lease? = getLeaseForConsumerGroup(topic, consumerGroup)
 
         if (lease == null) {
             // For å sikre at bare en konsument har mulighet til å få en lease taes det en eksplisitt lås her
             // Dette fordi "SELECT ... FOR UPDATE" ikke kan fungere når det ikke eksisterer en rad i tabellen å låse på.
             DbMutex.lock(CreateLeaseEntryLock, topic.name + consumerGroup)
 
-            @Language("SQL")
-            val insertQuery = queryOf(
-                """
-                INSERT INTO consumer_leases(topic, consumer_group)
-                VALUES(:topic, :consumer_group)
-            """.trimIndent(), paramMapTopicConsumer
-            ).asUpdate
-            tx.run(insertQuery)
+            // Another transaction may have created it while we waited.
+            lease = getLeaseForConsumerGroup(topic, consumerGroup)
+            if (lease == null) {
+                createLease(topic, consumerGroup)
+            }
 
             // Raden som kan låses på er satt inn, så da kan vi kalle oss selv på nytt.
             return acquireLease(topic, consumerGroup, instanceId, now)
@@ -131,12 +150,69 @@ object LeaseRepository {
             expiresAt = now + topic.leaseTime
         )
 
+        updateLease(newLease)
+
+        return LeaseStatus.Acquired(newLease)
+    }
+
+    context(tx: TransactionalSession)
+    fun getLeaseForConsumerGroup(topic: Topic, consumerGroup: String): Lease? {
+        @Language("SQL")
+        val query = queryOf(
+            """
+                SELECT topic, consumer_group, instance_id, token, expires_at
+                FROM consumer_leases
+                WHERE topic = ? AND consumer_group = ?
+                FOR UPDATE
+            """.trimIndent(),
+            topic.name, consumerGroup
+        )
+            .map(::leaseMapper)
+            .asSingle
+
+        return tx.run(query)
+    }
+
+    context(tx: TransactionalSession)
+    private fun getLeaseForLeaseToken(topic: Topic, leaseToken: String): Lease? {
+        @Language("SQL")
+        val query = queryOf(
+            """
+                SELECT topic, consumer_group, instance_id, token, expires_at
+                FROM consumer_leases
+                WHERE topic = ? AND token = ?
+                FOR UPDATE
+            """.trimIndent(),
+            topic.name, leaseToken
+        )
+            .map(::leaseMapper)
+            .asSingle
+
+        return tx.run(query)
+    }
+
+    context(tx: TransactionalSession)
+    private fun createLease(topic: Topic, consumerGroup: String): Int {
+        @Language("SQL")
+        val query = queryOf(
+            """
+                INSERT INTO consumer_leases(topic, consumer_group)
+                VALUES(?, ?)
+            """.trimIndent(),
+            topic.name, consumerGroup
+        ).asUpdate
+
+        return tx.run(query)
+    }
+
+    context(tx: TransactionalSession)
+    private fun updateLease(lease: Lease): Int {
         val paramMapLease = mapOf(
-            "topic" to newLease.topic,
-            "consumer_group" to newLease.consumerGroup,
-            "instance_id" to newLease.instanceId,
-            "token" to newLease.token,
-            "expires_at" to newLease.expiresAt.toJavaInstant()
+            "topic" to lease.topic,
+            "consumer_group" to lease.consumerGroup,
+            "instance_id" to lease.instanceId,
+            "token" to lease.token,
+            "expires_at" to lease.expiresAt.toJavaInstant()
         )
 
         @Language("SQL")
@@ -148,7 +224,17 @@ object LeaseRepository {
             """.trimIndent(), paramMapLease
         ).asUpdate
 
-        tx.run(updateQuery)
-        return LeaseStatus.Acquired(newLease)
+        return tx.run(updateQuery)
+    }
+
+
+    private fun leaseMapper(row: Row): Lease {
+        return Lease(
+            topic = row.string("topic"),
+            consumerGroup = row.string("consumer_group"),
+            instanceId = row.string("instance_id"),
+            token = row.string("token"),
+            expiresAt = row.instant("expires_at").toKotlinInstant()
+        )
     }
 }

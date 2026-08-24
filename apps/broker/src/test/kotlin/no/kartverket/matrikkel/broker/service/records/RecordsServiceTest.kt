@@ -9,6 +9,7 @@ import assertk.assertions.isFailure
 import assertk.assertions.isLessThan
 import assertk.assertions.isNotEmpty
 import assertk.assertions.isSuccess
+import assertk.assertions.messageContains
 import assertk.assertions.prop
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -19,13 +20,20 @@ import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.repository.withSession
+import no.kartverket.matrikkel.broker.repository.withTransaction
+import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
+import no.kartverket.matrikkel.broker.service.records.OffsetRepository
 import no.kartverket.matrikkel.broker.service.records.Records
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.currentHeadForTopic
+import no.kartverket.matrikkel.kafkaclient.CommitRequest
 import no.kartverket.matrikkel.kafkaclient.InitialOffsetPolicy
 import no.kartverket.matrikkel.kafkaclient.PollRequest
 import no.kartverket.matrikkel.kafkaclient.PublishRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import no.kartverket.matrikkel.kafkaclient.PublishResponse
+import no.kartverket.matrikkel.kafkaclient.SeekRequest
+import no.kartverket.no.kartverket.matrikkel.broker.service.records.TestUtils.createLease
+import no.kartverket.no.kartverket.matrikkel.broker.service.records.TestUtils.releaseLease
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.isApproxNow
 import org.junit.jupiter.api.Test
@@ -42,6 +50,7 @@ class RecordsServiceTest : WithDatabase {
             consumeIdentities = setOf(TopicAccessControlList.WILDCARD),
         )
     )
+    val consumerGroup = "dummy-group"
     val identity = ServiceIdentity("fake-user")
     val publishRequest = PublishRequest(
         idempotencyKey = "idempotency_key",
@@ -54,7 +63,7 @@ class RecordsServiceTest : WithDatabase {
     )
     val pollRequest = PollRequest(
         maxRecords = 10,
-        consumerGroup = "dummy-group",
+        consumerGroup = consumerGroup,
         instanceId = "dummy-instanceId",
         initialOffsetPolicy = InitialOffsetPolicy.EARLIEST
     )
@@ -106,6 +115,153 @@ class RecordsServiceTest : WithDatabase {
     }
 
     @Test
+    fun `should return Pollresponse with lease and empty list of records`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+        val pollResponseResult = service.poll(ctx, pollRequest)
+
+
+        assertThat(pollResponseResult).isSuccess()
+            .given {
+                assertThat(it.leaseToken).isNotEmpty()
+                assertThat(it.records).isEmpty()
+            }
+    }
+
+    @Test
+    fun `should return Pollresponse with lease and list of records`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+        service.publish(ctx, publishRequest)
+
+        val pollResponseResult = service.poll(ctx, pollRequest)
+
+
+        assertThat(pollResponseResult).isSuccess()
+            .given {
+                assertThat(it.leaseToken).isNotEmpty()
+                assertThat(it.records).hasSize(1)
+                assertThat(it.records.first().key.contentToString())
+                    .isEqualTo(publishRequest.records.first().key.contentToString())
+                assertThat(it.records.first().payload?.contentToString())
+                    .isEqualTo(publishRequest.records.first().payload?.contentToString())
+            }
+    }
+
+    @Test
+    fun `commit should fail if no offset is stored (its created on initiall poll)`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+
+        val lease = createLease(topic, consumerGroup)
+        val result = service.commit(ctx, CommitRequest(lease.token, 123L))
+
+        assertThat(result).isFailure()
+            .messageContains("Cannot commit when offset does not exist")
+    }
+
+    @Test
+    fun `commit should fail if offset is lower than the current offset`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+
+        val poll = service.poll(ctx, pollRequest).getOrThrow()
+
+        val result = service.commit(ctx, CommitRequest(poll.leaseToken, -123L))
+
+        assertThat(result).isFailure()
+            .messageContains("Sequence must be larger then current offset")
+    }
+
+    @Test
+    fun `commit should fail if offset is higher than the topic head`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+
+        val poll = service.poll(ctx, pollRequest).getOrThrow()
+
+        val result = service.commit(ctx, CommitRequest(poll.leaseToken, 123L))
+
+        assertThat(result).isFailure()
+            .messageContains("Sequence must not be greater than the topic head")
+    }
+
+    @Test
+    fun `commit update offset and return an updated leasetoken`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+
+        service.publish(ctx, publishRequest)
+        val poll = service.poll(ctx, pollRequest).getOrThrow()
+
+        val result = service.commit(ctx, CommitRequest(poll.leaseToken, poll.records.last().sequence))
+
+        assertThat(result).isSuccess()
+    }
+
+    @Test
+    fun `seek should fail if seeking below 0`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+
+        val result = service.seek(ctx, SeekRequest(consumerGroup, -1L))
+
+        assertThat(result).isFailure()
+            .messageContains("Cannot seek to any offset lower than 0")
+    }
+
+    @Test
+    fun `seek should fail if seeking ahead of topichead`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+
+        val result = service.seek(ctx, SeekRequest(consumerGroup, 10L))
+
+        assertThat(result).isFailure()
+            .messageContains("Sequence must not be greater than the topic head")
+    }
+
+    @Test
+    fun `seek should fail a active lease is present for the consumergroup`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+
+        service.poll(ctx, pollRequest)
+        val result = service.seek(ctx, SeekRequest(consumerGroup, 0L))
+
+        assertThat(result).isFailure()
+            .messageContains("A current lease prevents seeking for this consumer group")
+    }
+
+    @Test
+    fun `seek should update the offset`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+
+        service.publish(ctx, publishRequest)
+        val poll = service.poll(ctx, pollRequest).getOrThrow()
+        service.commit(ctx, CommitRequest(poll.leaseToken, 1L))
+        val initialOffset = dataSource().withTransaction {
+            withLease(topic, poll.leaseToken) {
+                OffsetRepository.getOffsetOrNull(topic, consumerGroup)
+            }
+        }
+        assertThat(initialOffset).isSuccess().isEqualTo(1)
+        releaseLease(topic)
+
+        val result = service.seek(ctx, SeekRequest(consumerGroup, 0L))
+
+        assertThat(result).isSuccess()
+        val offset = dataSource().withTransaction {
+            withLease(topic, consumerGroup, "test-instance") {
+                OffsetRepository.getOffsetOrNull(topic, consumerGroup)
+            }
+        }
+        assertThat(offset).isSuccess().isEqualTo(0)
+    }
+
+
+    @Test
     fun `high concurrency should not break sequencing`(): Unit = runBlocking {
         val workers = 10
         val recordsPerWorker = 400
@@ -154,39 +310,5 @@ class RecordsServiceTest : WithDatabase {
 
         assertThat(heads).isEqualTo(List(numberOfTopics) { (workers * recordsPerWorker).toLong() / numberOfTopics })
         assertThat(timeToInsert).isLessThan(5.seconds) // Around 1sec on OSX M1
-    }
-
-    @Test
-    fun `should return Pollresponse with lease and empty list of records`(): Unit = runBlocking {
-        val service = Records.ServiceImpl(dataSource())
-        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
-        val pollResponseResult = service.poll(ctx, pollRequest)
-
-
-        assertThat(pollResponseResult).isSuccess()
-            .given {
-                assertThat(it.leaseToken).isNotEmpty()
-                assertThat(it.records).isEmpty()
-            }
-    }
-
-    @Test
-    fun `should return Pollresponse with lease and list of records`(): Unit = runBlocking {
-        val service = Records.ServiceImpl(dataSource())
-        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
-        service.publish(ctx, publishRequest)
-
-        val pollResponseResult = service.poll(ctx, pollRequest)
-
-
-        assertThat(pollResponseResult).isSuccess()
-            .given {
-                assertThat(it.leaseToken).isNotEmpty()
-                assertThat(it.records).hasSize(1)
-                assertThat(it.records.first().key.contentToString())
-                    .isEqualTo(publishRequest.records.first().key.contentToString())
-                assertThat(it.records.first().payload?.contentToString())
-                    .isEqualTo(publishRequest.records.first().payload?.contentToString())
-            }
     }
 }

@@ -1,25 +1,11 @@
 package no.kartverket.matrikkel.kafkaclient
 
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.ClientRequestException
-import io.ktor.client.plugins.HttpRequestRetry
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.accept
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.Url
-import io.ktor.http.appendPathSegments
-import io.ktor.http.contentType
-import io.ktor.http.takeFrom
-import io.ktor.serialization.kotlinx.cbor.cbor
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import kotlinx.coroutines.delay
-import kotlinx.serialization.cbor.Cbor
 import java.io.Closeable
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -33,6 +19,7 @@ data class ConsumerRecords<TKey, TValue>(
     val topic: String,
     val records: List<ConsumerRecord<TKey, TValue>>,
 )
+
 data class ConsumerRecord<TKey, TValue>(
     val topic: String,
     val sequence: Long,
@@ -43,12 +30,13 @@ data class ConsumerRecord<TKey, TValue>(
 
 interface MessageConsumer<TKey, TValue> : Closeable {
     suspend fun poll(maxRecords: Int? = null, timeout: Duration? = null): ConsumerRecords<TKey, TValue>
-    suspend fun commitSync(sequence: Long): CommitResponse
-    suspend fun seek(sequence: Long): SeekResponse
+    suspend fun commitSync()
+    suspend fun seek(sequence: Long)
     suspend fun heartbeat(): HeartbeatResponse
 
     data class Config<TKey, TValue>(
         val server: Url,
+        val authentication: ClientAuthentication? = null,
         val topic: String,
         val keySerializer: Serde<TKey>,
         val valueSerializer: Serde<TValue>,
@@ -63,62 +51,41 @@ interface MessageConsumer<TKey, TValue> : Closeable {
 
     class Impl<TKey, TValue>(
         private val config: Config<TKey, TValue>,
+        private val client: HttpClient = createHttpClient(
+            maxRetries = config.maxRetries,
+            authentication = config.authentication,
+        ),
     ) : MessageConsumer<TKey, TValue> {
-        private var leaseToken: String? = null
-        private val client = HttpClient(CIO) {
-            expectSuccess = true
-            install(ContentNegotiation) {
-                cbor(
-                    Cbor {
-                        ignoreUnknownKeys = true
-                        encodeDefaults = true
-                    }
-                )
-            }
-
-            install(HttpRequestRetry) {
-                retryOnServerErrors(maxRetries = config.maxRetries)
-                exponentialDelay()
-            }
-        }
+        internal var leaseToken: String? = null
+        internal var lastDeliveredSequence: Long? = 0
 
         override suspend fun poll(
             maxRecords: Int?,
             timeout: Duration?,
         ): ConsumerRecords<TKey, TValue> {
-
-            val correlationId = config.correlationIdProvider()
             val response = try {
-                client.post {
-                    url.takeFrom(config.server)
-                        .appendPathSegments("topics", config.topic, "poll")
-                    header(HttpHeaders.XCorrelationId, correlationId)
-                    accept(ContentType.Application.Cbor)
-                    contentType(ContentType.Application.Cbor)
-                    setBody(
-                        PollRequest(
-                            maxRecords = maxRecords ?: config.maxRecords,
-                            consumerGroup = config.consumerGroup,
-                            instanceId = config.instanceId,
-                            initialOffsetPolicy = config.initialOffsetPolicy,
-                        )
+                client.postCBOR(
+                    operation = "poll",
+                    body = PollRequest(
+                        maxRecords = maxRecords ?: config.maxRecords,
+                        consumerGroup = config.consumerGroup,
+                        instanceId = config.instanceId,
+                        initialOffsetPolicy = config.initialOffsetPolicy,
                     )
-
-                }
-            } catch (e: ClientRequestException) {
-                when (e.response.status) {
+                )
+            } catch (e: KafkaClientException) {
+                when (e.status) {
                     HttpStatusCode.Locked -> {
                         delay(timeout ?: config.timeout)
                         return ConsumerRecords(topic = config.topic, records = emptyList())
                     }
+
                     else -> throw e
                 }
             }
 
             val responseBody = response.body<PollResponse>()
-            this.leaseToken = responseBody.leaseToken
-
-            return ConsumerRecords(topic = config.topic, records = responseBody.records.map {
+            val records = responseBody.records.map {
                 ConsumerRecord(
                     topic = config.topic,
                     sequence = it.sequence,
@@ -126,17 +93,55 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                     value = it.payload?.let(config.valueSerializer::deserialize),
                     publishedAt = it.publishedAt,
                 )
-            })
+            }
+
+            this.leaseToken = responseBody.leaseToken
+            this.lastDeliveredSequence = records.lastOrNull()?.sequence ?: this.lastDeliveredSequence
+
+            return ConsumerRecords(topic = config.topic, records = records)
 
         }
 
-        override suspend fun commitSync(sequence: Long): CommitResponse {
-            if (leaseToken == null) error("leaseToken is null")
-            TODO("Not yet implemented")
+        override suspend fun commitSync() {
+            val sequence = this.lastDeliveredSequence ?: return
+            val token = this.leaseToken ?: return
+
+            val response = try {
+                client.postCBOR(
+                    operation = "commit",
+                    body = CommitRequest(
+                        leaseToken = token,
+                        sequence = sequence
+                    )
+                )
+            } catch (e: KafkaClientException) {
+                when (e.status) {
+                    HttpStatusCode.Locked -> return
+                    else -> throw e
+                }
+            }
+
+            val responseBody = response.body<CommitResponse>()
+            this.leaseToken = responseBody.leaseToken
         }
 
-        override suspend fun seek(sequence: Long): SeekResponse {
-            TODO("Not yet implemented")
+        override suspend fun seek(sequence: Long) {
+            try {
+                client.postCBOR(
+                    operation = "seek",
+                    body = SeekRequest(
+                        consumerGroup = config.consumerGroup,
+                        sequence = sequence
+                    )
+                )
+            } catch (e: KafkaClientException) {
+                when (e.status) {
+                    HttpStatusCode.Locked -> return
+                    else -> throw e
+                }
+            }
+
+            this.lastDeliveredSequence = sequence
         }
 
         override suspend fun heartbeat(): HeartbeatResponse {
@@ -145,6 +150,20 @@ interface MessageConsumer<TKey, TValue> : Closeable {
 
         override fun close() {
             client.close()
+        }
+
+        private suspend inline fun <reified T> HttpClient.postCBOR(
+            operation: String,
+            body: T,
+        ): HttpResponse {
+            return this.post {
+                url.takeFrom(config.server)
+                    .appendPathSegments("topics", config.topic, operation)
+                header(HttpHeaders.XCorrelationId, config.correlationIdProvider())
+                accept(ContentType.Application.Cbor)
+                contentType(ContentType.Application.Cbor)
+                setBody(body)
+            }
         }
     }
 }

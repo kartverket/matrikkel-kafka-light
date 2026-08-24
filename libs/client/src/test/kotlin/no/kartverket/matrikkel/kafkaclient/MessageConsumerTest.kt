@@ -12,6 +12,7 @@ import io.ktor.client.plugins.ServerResponseException
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
@@ -162,7 +163,7 @@ class MessageConsumerTest {
 
     @Test
     fun `should wait for default timeout if locked and return empty list`() = runTest {
-        server.enqueue(MockResponse().setResponseCode(HttpStatusCode.Locked.value))
+        server.enqueueCborResponse(ErrorResponse("locked", "Could not acquire lease"), code = HttpStatusCode.Locked.value)
         server.start()
 
         val consumer = MessageConsumer.Impl(config = clientConfig)
@@ -177,7 +178,7 @@ class MessageConsumerTest {
 
     @Test
     fun `should wait for provided timeout instead of config default when locked`() = runTest {
-        server.enqueue(MockResponse().setResponseCode(HttpStatusCode.Locked.value))
+        server.enqueueCborResponse(ErrorResponse("locked", "Could not acquire lease"), code = HttpStatusCode.Locked.value)
         server.start()
 
         val consumer = MessageConsumer.Impl(config = clientConfig)
@@ -228,7 +229,7 @@ class MessageConsumerTest {
     }
 
     @Test
-    fun `should throw error on 400-errors other than 423-locked`() = runTest {
+    fun `should throw standard ktor-error if deserialization of ErrorResponse fails`() = runTest {
         server.enqueue(MockResponse().setResponseCode(400))
         server.start()
 
@@ -239,5 +240,66 @@ class MessageConsumerTest {
         }.isInstanceOf<ClientRequestException>()
 
         consumer.close()
+    }
+
+    @Test
+    fun `should throw error on 400-errors other than 423-locked`() = runTest {
+        server.enqueueCborResponse(ErrorResponse("TEST-01", "Something was wrong"), code = 403)
+        server.start()
+
+        MessageConsumer.Impl(config = clientConfig).use { consumer ->
+            assertFailure {
+                consumer.poll()
+            }.isInstanceOf<KafkaClientException>()
+        }
+    }
+
+    @Test
+    fun `poll keeps track of latest delivered message`(): Unit = runBlocking {
+        server.enqueueCborResponse(pollResponse)
+        server.enqueueCborResponse(CommitResponse("updated-lease-token"))
+        server.start()
+
+        val consumer = MessageConsumer.Impl(config = clientConfig)
+
+        consumer.poll()
+        assertThat(consumer.lastDeliveredSequence).isEqualTo(1)
+    }
+
+    @Test
+    fun `commit uses tracked sequence number, and updates lease`(): Unit = runBlocking {
+        server.enqueueCborResponse(pollResponse)
+        server.enqueueCborResponse(CommitResponse("updated-lease-token"))
+        server.start()
+
+        val consumer = MessageConsumer.Impl(config = clientConfig)
+
+        consumer.poll()
+        assertThat(consumer.leaseToken).isEqualTo("test-lease-token")
+        consumer.commitSync()
+        assertThat(consumer.leaseToken).isEqualTo("updated-lease-token")
+
+        val commitRequest = server.takeRequests(2).last()
+        val body = commitRequest.responseBody<CommitRequest>()
+
+        assertThat(body.leaseToken).isEqualTo("test-lease-token")
+        assertThat(body.sequence).isEqualTo(1)
+    }
+
+    @Test
+    fun `seek updates last delivered`(): Unit = runBlocking {
+        server.enqueueCborResponse(SeekResponse())
+        server.start()
+
+        val consumer = MessageConsumer.Impl(config = clientConfig)
+        consumer.seek(13L)
+
+        assertThat(consumer.lastDeliveredSequence).isEqualTo(13)
+        val seekRequest = server.takeRequest()
+        val body = seekRequest.responseBody<SeekRequest>()
+
+        assertThat(body.consumerGroup).isEqualTo("test-group")
+        assertThat(body.sequence).isEqualTo(13L)
+
     }
 }

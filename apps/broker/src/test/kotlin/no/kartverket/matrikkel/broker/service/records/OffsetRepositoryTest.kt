@@ -2,6 +2,7 @@ package no.kartverket.no.kartverket.matrikkel.broker.service.records
 
 import assertk.assertThat
 import assertk.assertions.isEqualTo
+import assertk.assertions.isFailure
 import assertk.assertions.isSuccess
 import kotlinx.coroutines.runBlocking
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
@@ -78,6 +79,30 @@ class OffsetRepositoryTest : WithDatabase {
         }
 
         assertThat(offset).isSuccess().isEqualTo(0)
+    }
+
+    @Test
+    fun `should fail is offset does not exist`(): Unit = runBlocking {
+        val offset = dataSource().withTransaction {
+            withLease(topic, consumerGroup, instanceId) {
+                OffsetRepository.setOffset(topic, consumerGroup, 100L)
+            }
+        }
+
+        assertThat(offset).isFailure()
+    }
+
+    @Test
+    fun `should update existing offset`(): Unit = runBlocking {
+        val offset = dataSource().withTransaction {
+            withLease(topic, consumerGroup, instanceId) {
+                OffsetRepository.getOffset(topic, consumerGroup, InitialOffsetPolicy.EARLIEST)
+                OffsetRepository.setOffset(topic, consumerGroup,100L)
+                OffsetRepository.getOffset(topic, consumerGroup, InitialOffsetPolicy.EARLIEST)
+            }
+        }
+
+        assertThat(offset).isSuccess().isEqualTo(100L)
     }
 
     private suspend fun createRecord(numRcords: Int) {

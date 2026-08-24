@@ -21,8 +21,29 @@ object OffsetRepository {
         return getOffset(topic, consumerGroup, initialOffsetPolicy)
     }
 
+    context(tx: TransactionalSession)
+    fun setOffset(topic: Topic, consumerGroup: String, offset: Long){
+        val params = mapOf(
+            "topic" to topic.name,
+            "consumer_group" to consumerGroup,
+            "offset" to offset
+        )
+        @Language("SQL")
+        val query = queryOf("""
+            UPDATE consumer_offsets SET committed_sequence = :offset
+            WHERE topic = :topic AND consumer_group = :consumer_group
+        """.trimIndent(), params)
+            .asUpdate
+
+        val rowsUpdated = tx.run(query)
+        require(rowsUpdated == 1) {
+            "Number of offsets updated mismatch. Expected: 1, but got $rowsUpdated"
+        }
+    }
+
+
     context(tx: TransactionalSession, _: LeaseStatus.Acquired)
-    private fun getOffsetOrNull(
+    fun getOffsetOrNull(
         topic: Topic,
         consumerGroup: String,
     ): Long? {
