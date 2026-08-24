@@ -20,7 +20,7 @@ hikari = { module = "com.zaxxer:HikariCP", version = "7.1.0" }
 postgresql = { module = "org.postgresql:postgresql", version = "42.7.13" }
 h2 = { module = "com.h2database:h2", version = "2.4.240"}
 kotliquery = { module = "com.github.seratch:kotliquery", version = "1.9.1" }
-micrometerPrometheus = { module = "io.micrometer:micrometer-registry-prometheus", version = "1.17.0" }
+micrometerPrometheus = { module = "io.micrometer:micrometer-registry-prometheus", version = "1.17.1" }
 
 junitApi = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junitVersion" }
 junitEngine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junitVersion" }
