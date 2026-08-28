@@ -9,7 +9,7 @@ updates:
     schedule:
       interval: "daily"
   - package-ecosystem: "docker"
-    directory: "/"
+    directory: "/apps/broker"
     schedule:
       interval: "weekly"
     ignore:
