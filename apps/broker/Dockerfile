@@ -1,4 +1,4 @@
-FROM eclipse-temurin:25-jre-alpine@sha256:c707c0d18cb9e8556380719f80d96a7529d0746fbb42143893949b98ed2f8943
+FROM eclipse-temurin:25-jre-alpine@sha256:3137541deb3cac6626b5d9a4a2187bc0d6a34312f858bd2c67dd01e732e6b682
 
 RUN addgroup -g 150 -S apprunner \
  && adduser -u 150 -S apprunner -G apprunner
