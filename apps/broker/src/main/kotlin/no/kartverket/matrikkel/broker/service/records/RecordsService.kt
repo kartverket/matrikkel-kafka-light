@@ -5,6 +5,8 @@ import no.kartverket.matrikkel.broker.ServiceException
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.isBefore
+import no.kartverket.matrikkel.broker.metrics.OffsetMetrics
+import no.kartverket.matrikkel.broker.metrics.TopicMetrics
 import no.kartverket.matrikkel.broker.repository.DbMutex
 import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
@@ -38,7 +40,7 @@ object Records {
         override val seed: Long = 1231231L
     }
 
-    class ServiceImpl(val dataSource: DataSource) : Service {
+    class ServiceImpl(val dataSource: DataSource, val offsetMetrics: OffsetMetrics? = null, val topicMetrics: TopicMetrics?=null) : Service {
         override suspend fun publish(
             ctx: Service.Ctx,
             request: PublishRequest
@@ -51,13 +53,15 @@ object Records {
                     if (existing != null) {
                         Result.success(existing)
                     } else {
-                        insertRecords(
+                        val result = insertRecords(
                             topic = ctx.topic,
                             identity = ctx.identity,
                             correlationId = ctx.correlationId,
                             request = request,
                             initialSequence = currentHeadForTopic(ctx.topic)
                         )
+                        topicMetrics?.update(ctx.topic,currentHeadForTopic(ctx.topic))
+                        result
                     }
                 }
             }
@@ -70,6 +74,7 @@ object Records {
             return dataSource.withTransaction {
                 withLease(ctx.topic, request.consumerGroup, request.instanceId) { lease ->
                     val offset = getOffset(ctx.topic, request.consumerGroup, request.initialOffsetPolicy)
+                    offsetMetrics?.update(ctx.topic, request.consumerGroup, offset)
                     val polledRecords = pollRecords(ctx.topic, request.maxRecords, offset)
                     PollResponse(polledRecords, lease.token)
                 }

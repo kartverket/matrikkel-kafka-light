@@ -17,6 +17,7 @@ import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.header
 import io.ktor.server.request.path
 import io.ktor.server.routing.*
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.cbor.Cbor
 import no.kartverket.heimdall.common.ktor.plugins.Metrics
 import no.kartverket.heimdall.common.ktor.plugins.selftest.Selftest
@@ -25,7 +26,11 @@ import no.kartverket.heimdall.common.ktor.utils.KtorServer
 import no.kartverket.matrikkel.broker.api.topicRoutes
 import no.kartverket.matrikkel.broker.config.Configuration
 import no.kartverket.matrikkel.broker.config.DataSourceConfiguration
+import no.kartverket.matrikkel.broker.metrics.OffsetMetrics
+import no.kartverket.matrikkel.broker.metrics.TopicMetrics
+import no.kartverket.matrikkel.broker.service.records.OffsetRepository
 import no.kartverket.matrikkel.broker.service.records.Records
+import no.kartverket.matrikkel.broker.service.records.RecordsRepository
 import org.slf4j.LoggerFactory
 import kotlin.uuid.Uuid
 
@@ -35,6 +40,16 @@ fun runApplication(disableSecurity: Boolean = false) {
         config.azuread
     )
     DataSourceConfiguration.migrate(config.database)
+
+    val dataSource = DataSourceConfiguration.createDatasource(
+        config.database.jdbcUrl,
+        config.database.userCredential,
+    )
+
+    val offsetMetrics = OffsetMetrics(Metrics.Registry)
+    runBlocking { offsetMetrics.initialize(config.topicsCatalog.topics, OffsetRepository, dataSource) }
+    val topicMetrics = TopicMetrics(Metrics.Registry)
+    runBlocking { topicMetrics.initialize(config.topicsCatalog.topics, RecordsRepository, dataSource) }
 
     KtorServer.create(factory = Netty, port = 8081) {
         standardPlugins(config.version)
@@ -53,10 +68,9 @@ fun runApplication(disableSecurity: Boolean = false) {
                 topicRoutes(
                     topicCatalog = config.topicsCatalog,
                     recordsService = Records.ServiceImpl(
-                        DataSourceConfiguration.createDatasource(
-                            config.database.jdbcUrl,
-                            config.database.userCredential,
-                        )
+                        dataSource,
+                        offsetMetrics,
+                        topicMetrics,
                     ),
                 )
             }
