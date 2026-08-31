@@ -9,6 +9,7 @@ import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.repository.DbMutex
+import no.kartverket.matrikkel.broker.repository.withSession
 import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
 import no.kartverket.matrikkel.broker.service.records.OffsetRepository
@@ -103,6 +104,21 @@ class OffsetRepositoryTest : WithDatabase {
         }
 
         assertThat(offset).isSuccess().isEqualTo(100L)
+    }
+
+    @Test
+    fun `should return offsets per consumer group`(): Unit = runBlocking {
+        dataSource().withTransaction {
+            withLease(topic, consumerGroup, instanceId) {
+                OffsetRepository.getOffset(topic, consumerGroup, InitialOffsetPolicy.EARLIEST)
+                OffsetRepository.setOffset(topic, consumerGroup, 100L)
+            }
+        }
+        val offset = dataSource().withSession {
+            OffsetRepository.getOffsets(topic)
+        }
+
+        assertThat(offset).isEqualTo(mapOf(consumerGroup to 100L))
     }
 
     private suspend fun createRecord(numRcords: Int) {

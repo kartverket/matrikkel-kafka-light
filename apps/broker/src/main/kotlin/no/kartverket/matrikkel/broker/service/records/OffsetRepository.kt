@@ -1,5 +1,6 @@
 package no.kartverket.matrikkel.broker.service.records
 
+import kotliquery.Session
 import kotliquery.TransactionalSession
 import kotliquery.queryOf
 import no.kartverket.matrikkel.broker.domain.Topic
@@ -19,6 +20,25 @@ object OffsetRepository {
 
         createOffset(topic, consumerGroup, initialOffsetPolicy)
         return getOffset(topic, consumerGroup, initialOffsetPolicy)
+    }
+
+    context(session: Session)
+    fun getOffsets(
+        topic: Topic,
+    ): Map<String, Long> {
+
+        @Language("SQL")
+        val query = queryOf(
+            """
+            SELECT consumer_group, committed_sequence
+            FROM consumer_offsets
+            WHERE topic = :topic
+        """.trimIndent(), mapOf("topic" to topic.name)
+        )
+            .map { it.string("consumer_group") to it.long("committed_sequence") }
+            .asList
+
+        return session.run(query).toMap()
     }
 
     context(tx: TransactionalSession)
