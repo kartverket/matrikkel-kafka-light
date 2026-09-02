@@ -6,6 +6,8 @@ import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.LeaseStatus
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.acquireLease
+import no.kartverket.matrikkel.broker.service.records.OffsetRepository
+import no.kartverket.matrikkel.kafkaclient.InitialOffsetPolicy
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
 import org.intellij.lang.annotations.Language
 import kotlin.time.Clock
@@ -28,6 +30,20 @@ object TestUtils {
                 is LeaseStatus.Acquired -> status.lease
                 else -> error("Could not create lease")
             }
+        }
+    }
+
+    suspend fun WithDatabase.createOffset(
+        topic: Topic,
+        consumerGroup: String,
+        value: Long,
+    ) {
+        return dataSource().withTransaction {
+            LeaseRepository.withLease(topic, consumerGroup, "instanceID", fn = {
+                OffsetRepository.getOffset(topic, consumerGroup, InitialOffsetPolicy.EARLIEST)
+                OffsetRepository.setOffset(topic, consumerGroup, value)
+            })
+            releaseLease(topic)
         }
     }
 

@@ -1,8 +1,10 @@
 package no.kartverket.matrikkel.broker.service.records
 
+import kotliquery.Session
 import kotliquery.TransactionalSession
 import kotliquery.queryOf
 import no.kartverket.matrikkel.broker.domain.Topic
+import no.kartverket.matrikkel.broker.domain.TopicCatalog
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.LeaseStatus
 import no.kartverket.matrikkel.kafkaclient.InitialOffsetPolicy
 import org.intellij.lang.annotations.Language
@@ -64,6 +66,32 @@ object OffsetRepository {
             .asSingle
 
         return tx.run(query)
+    }
+
+    context(session: Session)
+    fun getOffsets(topicCatalog: TopicCatalog): Map<Topic, Map<String, Long>> {
+        @Language("SQL")
+        val query = queryOf(
+            """
+            SELECT topic, consumer_group, committed_sequence
+            FROM consumer_offsets
+        """.trimIndent()
+        )
+            .map {
+                Triple(
+                    topicCatalog.get(it.string("topic")),
+                    it.string("consumer_group"),
+                    it.long("committed_sequence"),
+                )
+            }
+            .asList
+
+        return session.run(query)
+            .groupBy(
+                keySelector = { it.first },
+                valueTransform = { it.second to it.third }
+            )
+            .mapValues { it.value.toMap() }
     }
 
     context(tx: TransactionalSession, _: LeaseStatus.Acquired)

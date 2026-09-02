@@ -1,6 +1,7 @@
 package no.kartverket.no.kartverket.matrikkel.broker.service.records
 
 import assertk.assertThat
+import assertk.assertions.hasSize
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
 import assertk.assertions.isSuccess
@@ -8,7 +9,9 @@ import kotlinx.coroutines.runBlocking
 import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
+import no.kartverket.matrikkel.broker.domain.TopicCatalog
 import no.kartverket.matrikkel.broker.repository.DbMutex
+import no.kartverket.matrikkel.broker.repository.withSession
 import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
 import no.kartverket.matrikkel.broker.service.records.OffsetRepository
@@ -16,6 +19,7 @@ import no.kartverket.matrikkel.broker.service.records.RecordsRepository
 import no.kartverket.matrikkel.kafkaclient.InitialOffsetPolicy
 import no.kartverket.matrikkel.kafkaclient.PublishRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
+import no.kartverket.no.kartverket.matrikkel.broker.service.records.TestUtils.createOffset
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
 import org.junit.jupiter.api.Test
 import kotlin.uuid.Uuid
@@ -79,6 +83,30 @@ class OffsetRepositoryTest : WithDatabase {
         }
 
         assertThat(offset).isSuccess().isEqualTo(0)
+    }
+
+    @Test
+    fun `should fetch all offsets`() = runBlocking {
+        val anotherTopic = Topic(
+            name = "another_topic",
+            acl = TopicAccessControlList(
+                publishIdentities = setOf(TopicAccessControlList.WILDCARD),
+                consumeIdentities = setOf(TopicAccessControlList.WILDCARD),
+            )
+        )
+        createOffset(topic, "c1", 123)
+        createOffset(topic, "c2", 456)
+        createOffset(topic, "c3", 789)
+        createOffset(anotherTopic, "c2", 654)
+        createOffset(anotherTopic, "c3", 321)
+
+        val offsetsPerTopicPerConsumergroup = dataSource().withSession {
+            OffsetRepository.getOffsets(TopicCatalog(listOf(topic, anotherTopic)))
+        }
+
+        assertThat(offsetsPerTopicPerConsumergroup).hasSize(2)
+        assertThat(offsetsPerTopicPerConsumergroup[topic]?.size ?: 0).isEqualTo(3)
+        assertThat(offsetsPerTopicPerConsumergroup[anotherTopic]?.size ?: 0).isEqualTo(2)
     }
 
     @Test
