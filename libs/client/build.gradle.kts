@@ -20,11 +20,25 @@ publishing {
     publications {
         create<MavenPublication>("mavenJava") {
             from(components["java"])
-            groupId = "no.kartverket.matrikkel"
-            artifactId = "matrikkel-kafka-light"
-            version = providers.systemProperty("suffix").orElse("0-SNAPSHOT").get()
+            groupId = "no.kartverket.kafkalight"
+            artifactId = "client"
             pom {
-                description = "Implementation of no.kartverket.matrikkel:matrikkel-kafka-light:${version}"
+                name.set("kafka-light-client")
+                description.set("Client for use with kafka light component")
+                url.set("https://github.com/kartverket/matrikkel-kafka-light")
+
+                licenses {
+                    license {
+                        name.set("MIT License")
+                        url.set("https://github.com/kartverket/heimdall-common-utils/blob/main/LICENSE")
+                    }
+                }
+
+                scm {
+                    connection.set("scm:git:https://github.com/kartverket/matrikkel-kafka-light.git")
+                    developerConnection.set("scm:git:ssh://git@github.com/kartverket/matrikkel-kafka-light.git")
+                    url.set("https://github.com/kartverket/matrikkel-kafka-light")
+                }
             }
         }
     }
