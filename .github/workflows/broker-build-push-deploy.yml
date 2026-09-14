@@ -239,7 +239,7 @@ jobs:
       - version
       - test
       - package-image
-    if: (github.ref_name == 'main' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
+    if: github.ref_name == 'main' && github.event_name == 'push'
 
     permissions:
       contents: read
@@ -249,13 +249,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up JDK 25
+      - name: Set up Java
         uses: actions/setup-java@v6.0.1
         with:
           java-version: '25'
           distribution: 'temurin'
 
       - name: Publish to GitHub Packages
-        run: ./gradlew publish --stacktrace -Dsuffix=${{ needs.calculate-version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew publish --stacktrace -Pversion="${{ needs.calculate-version.outputs.version }}"
