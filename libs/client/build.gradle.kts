@@ -30,7 +30,7 @@ publishing {
                 licenses {
                     license {
                         name.set("MIT License")
-                        url.set("https://github.com/kartverket/heimdall-common-utils/blob/main/LICENSE")
+                        url.set("https://github.com/kartverket/matrikkel-kafka-light/blob/main/LICENSE")
                     }
                 }
 
