@@ -41,21 +41,21 @@ class Configuration(
                 ),
             ),
             Topic(
-                name = "SERG_HENDELSER_THIN",
+                name = "SERG_HENDELSER_FOR_FORMUESOBJEKT_FAST_EIENDOM_THIN",
                 leaseTime = 5.minutes,
                 tombstonesAllowed = false,
                 acl = TopicAccessControlList(
-                    publishIdentities = setOf(TopicAccessControlList.WILDCARD),
-                    consumeIdentities = setOf(TopicAccessControlList.WILDCARD),
+                    publishIdentities = setOf("matrikkel-serg-sync"),
+                    consumeIdentities = setOf("matrikkel-ekstern-data-ingestor", "matrikkel-serg-sync"),
                 ),
             ),
             Topic(
-                name = "SERG_HENDELSER_THICK",
+                name = "SERG_HENDELSER_FOR_FORMUESOBJEKT_FAST_EIENDOM_THICK",
                 leaseTime = 5.minutes,
                 tombstonesAllowed = false,
                 acl = TopicAccessControlList(
-                    publishIdentities = setOf(TopicAccessControlList.WILDCARD),
-                    consumeIdentities = setOf(TopicAccessControlList.WILDCARD),
+                    publishIdentities = setOf("matrikkel-serg-sync"),
+                    consumeIdentities = setOf("matrikkel-ekstern-data-ingestor"),
                 ),
             ),
         )
