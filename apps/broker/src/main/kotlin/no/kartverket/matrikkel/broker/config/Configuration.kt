@@ -40,6 +40,24 @@ class Configuration(
                     consumeIdentities = setOf(TopicAccessControlList.WILDCARD),
                 ),
             ),
+            Topic(
+                name = "SERG_HENDELSER_THIN",
+                leaseTime = 5.minutes,
+                tombstonesAllowed = false,
+                acl = TopicAccessControlList(
+                    publishIdentities = setOf(TopicAccessControlList.WILDCARD),
+                    consumeIdentities = setOf(TopicAccessControlList.WILDCARD),
+                ),
+            ),
+            Topic(
+                name = "SERG_HENDELSER_THICK",
+                leaseTime = 5.minutes,
+                tombstonesAllowed = false,
+                acl = TopicAccessControlList(
+                    publishIdentities = setOf(TopicAccessControlList.WILDCARD),
+                    consumeIdentities = setOf(TopicAccessControlList.WILDCARD),
+                ),
+            ),
         )
     )
 )
