@@ -239,7 +239,7 @@ jobs:
       - version
       - test
       - package-image
-    if: github.ref_name == 'main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main'
 
     permissions:
       contents: read
@@ -264,4 +264,4 @@ jobs:
       - name: Publish to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew publish --stacktrace -Pversion="${{ needs.calculate-version.outputs.version }}"
+        run: ./gradlew publish --stacktrace -Pversion="${{ needs.version.outputs.version }}"
