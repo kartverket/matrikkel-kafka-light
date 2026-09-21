@@ -41,7 +41,7 @@ class Configuration(
                 ),
             ),
             Topic(
-                name = "SERG_HENDELSER_FOR_FORMUESOBJEKT_FAST_EIENDOM_THIN",
+                name = "SERG_HENDELSER",
                 leaseTime = 5.minutes,
                 tombstonesAllowed = false,
                 acl = TopicAccessControlList(
@@ -50,7 +50,7 @@ class Configuration(
                 ),
             ),
             Topic(
-                name = "SERG_HENDELSER_FOR_FORMUESOBJEKT_FAST_EIENDOM_THICK",
+                name = "SERG_FORMUESOBJEKT_FAST_EIENDOM",
                 leaseTime = 5.minutes,
                 tombstonesAllowed = false,
                 acl = TopicAccessControlList(
