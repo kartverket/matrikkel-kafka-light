@@ -1,9 +1,9 @@
 package no.kartverket.matrikkel.broker.config
 
 import io.ktor.http.HttpHeaders
+import no.kartverket.heimdall.common.kotlin.EnvUtils.getConfig
+import no.kartverket.heimdall.common.kotlin.EnvUtils.getConfigOrNull
 import no.kartverket.heimdall.common.ktor.plugins.security.Security
-import no.kartverket.heimdall.common.ktor.utils.EnvUtils.getConfig
-import no.kartverket.heimdall.common.ktor.utils.EnvUtils.getRequiredConfig
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
@@ -16,16 +16,16 @@ class DatabaseConfiguration(
 )
 
 class Configuration(
-    val version: String = getRequiredConfig("VERSION"),
+    val version: String = getConfig("VERSION"),
     val azuread: Security.AuthProvider = Security.AuthProvider(
         name = "azuread",
         jwksConfig = Security.JwksConfig.OidcWellkownUrl(
-            getRequiredConfig("AZURE_APP_WELL_KNOWN_URL")
+            getConfig("AZURE_APP_WELL_KNOWN_URL")
         ),
         tokenLocation = Security.TokenLocation.Header(HttpHeaders.Authorization)
     ),
     val database: DatabaseConfiguration = DatabaseConfiguration(
-        jdbcUrl = getRequiredConfig("DB_URL"),
+        jdbcUrl = getConfig("DB_URL"),
         userCredential = Credential.from("DB_USER"),
         adminCredential = Credential.from("DB_ADMIN"),
     ),
@@ -76,5 +76,5 @@ class Credential(
 
 
 private fun firstNonNullOf(vararg name: String): String {
-    return name.firstNotNullOf { getConfig(it) }
+    return name.firstNotNullOf { getConfigOrNull(it) }
 }

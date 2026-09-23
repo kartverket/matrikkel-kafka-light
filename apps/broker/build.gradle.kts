@@ -27,6 +27,7 @@ dependencies {
     implementation(libs.logstash)
     implementation(libs.micrometerPrometheus)
     implementation(libs.ktorUtils)
+    implementation(libs.kotlinUtils)
 
     implementation(libs.flyway)
     implementation(libs.flyway.postgresql)
