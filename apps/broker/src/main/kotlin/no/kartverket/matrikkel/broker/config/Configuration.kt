@@ -1,7 +1,6 @@
 package no.kartverket.matrikkel.broker.config
 
 import io.ktor.http.HttpHeaders
-import io.ktor.server.auth.Credential
 import no.kartverket.heimdall.common.kotlin.EnvUtils.getConfig
 import no.kartverket.heimdall.common.kotlin.EnvUtils.getConfigOrNull
 import no.kartverket.heimdall.common.ktor.plugins.security.Security
