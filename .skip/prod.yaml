@@ -36,6 +36,11 @@ spec:
     application:
       enabled: true
 
+  accessPolicy:
+    inbound:
+      rules:
+        - application: matrikkel-ekstern-data-ingestor
+
   databases:
     - name: matrikkel-kafka-light
       envName: DB_URL
@@ -51,3 +56,5 @@ spec:
       value: "kafka_light_admin"
     - name: DB_ADMIN_PASSWORD
       gsmSecretName: "prod-matrikkel-kafka-light-db-admin-password"
+    - name: AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_EKSTERN_DATA_INGESTOR
+      value: "d21c5148-833e-482f-b798-a83bbc5198ad"
