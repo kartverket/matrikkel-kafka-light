@@ -17,6 +17,7 @@ class DatabaseConfiguration(
 
 class Configuration(
     val version: String = getConfig("VERSION"),
+    val matrikkelEksternDataIngestorIdentity: String = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_EKSTERN_DATA_INGESTOR"),
     val azuread: Security.AuthProvider = Security.AuthProvider(
         name = "azuread",
         jwksConfig = Security.JwksConfig.OidcWellkownUrl(
@@ -46,7 +47,7 @@ class Configuration(
                 tombstonesAllowed = false,
                 acl = TopicAccessControlList(
                     publishIdentities = setOf("matrikkel-serg-sync"),
-                    consumeIdentities = setOf("matrikkel-ekstern-data-ingestor", "matrikkel-serg-sync"),
+                    consumeIdentities = setOf("matrikkel-serg-sync"),
                 ),
             ),
             Topic(
@@ -55,7 +56,7 @@ class Configuration(
                 tombstonesAllowed = false,
                 acl = TopicAccessControlList(
                     publishIdentities = setOf("matrikkel-serg-sync"),
-                    consumeIdentities = setOf("matrikkel-ekstern-data-ingestor"),
+                    consumeIdentities = setOf(matrikkelEksternDataIngestorIdentity),
                 ),
             ),
         )
