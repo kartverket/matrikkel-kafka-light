@@ -1,6 +1,7 @@
 package no.kartverket.matrikkel.broker.config
 
 import io.ktor.http.HttpHeaders
+import io.ktor.server.auth.Credential
 import no.kartverket.heimdall.common.kotlin.EnvUtils.getConfig
 import no.kartverket.heimdall.common.kotlin.EnvUtils.getConfigOrNull
 import no.kartverket.heimdall.common.ktor.plugins.security.Security
@@ -18,6 +19,7 @@ class DatabaseConfiguration(
 class Configuration(
     val version: String = getConfig("VERSION"),
     val matrikkelEksternDataIngestorIdentity: String = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_EKSTERN_DATA_INGESTOR"),
+    val matrikkelSergSyncIdentity: String = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_SERG_SYNC"),
     val azuread: Security.AuthProvider = Security.AuthProvider(
         name = "azuread",
         jwksConfig = Security.JwksConfig.OidcWellkownUrl(
@@ -46,8 +48,8 @@ class Configuration(
                 leaseTime = 5.minutes,
                 tombstonesAllowed = false,
                 acl = TopicAccessControlList(
-                    publishIdentities = setOf("matrikkel-serg-sync"),
-                    consumeIdentities = setOf("matrikkel-serg-sync"),
+                    publishIdentities = setOf(matrikkelSergSyncIdentity),
+                    consumeIdentities = setOf(matrikkelSergSyncIdentity),
                 ),
             ),
             Topic(
@@ -55,7 +57,7 @@ class Configuration(
                 leaseTime = 5.minutes,
                 tombstonesAllowed = false,
                 acl = TopicAccessControlList(
-                    publishIdentities = setOf("matrikkel-serg-sync"),
+                    publishIdentities = setOf(matrikkelSergSyncIdentity),
                     consumeIdentities = setOf(matrikkelEksternDataIngestorIdentity),
                 ),
             ),

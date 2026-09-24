@@ -58,3 +58,5 @@ spec:
       gsmSecretName: "prodtest-matrikkel-kafka-light-db-admin-password"
     - name: AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_EKSTERN_DATA_INGESTOR
       value: "d284ed4e-5df3-4cfe-b776-80618e802c05"
+    - name: AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_SERG_SYNC
+      value: ""
