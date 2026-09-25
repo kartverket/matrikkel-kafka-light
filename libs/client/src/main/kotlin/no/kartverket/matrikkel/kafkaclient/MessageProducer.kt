@@ -1,6 +1,7 @@
 package no.kartverket.matrikkel.kafkaclient
 
 import io.ktor.client.*
+import io.ktor.client.call.body
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
@@ -21,6 +22,7 @@ data class ProducerRecord<TKey, TValue>(
 
 interface MessageProducer<TKey, TValue> : Closeable {
     suspend fun send(record: ProducerRecord<TKey, TValue>): CompletableDeferred<Unit>
+    suspend fun metadata(): MetadataResponse
 
     data class Config<TKey, TValue>(
         val server: Url,
@@ -68,6 +70,15 @@ interface MessageProducer<TKey, TValue> : Closeable {
                 )
             )
             return callback
+        }
+
+        override suspend fun metadata(): MetadataResponse {
+            return client.get {
+                url.takeFrom(config.server).appendPathSegments("topics", config.topic, "metadata")
+                header(HttpHeaders.XCorrelationId, config.correlationIdProvider())
+                accept(ContentType.Application.Cbor)
+                contentType(ContentType.Application.Cbor)
+            }.body()
         }
 
         override fun close() {
