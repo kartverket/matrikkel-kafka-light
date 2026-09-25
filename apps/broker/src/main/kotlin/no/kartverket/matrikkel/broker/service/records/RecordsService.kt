@@ -111,7 +111,11 @@ object Records {
             ctx: Service.Ctx,
             request: HeartbeatRequest
         ): Result<HeartbeatResponse> {
-            return Result.failure("heartbeat to ${ctx.topic.name} by ${ctx.identity.value}")
+            return dataSource.withTransaction {
+                withLease(ctx.topic, request.leaseToken) { lease ->
+                    HeartbeatResponse(leaseToken = lease.token)
+                }
+            }
         }
 
 
