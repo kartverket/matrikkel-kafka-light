@@ -32,7 +32,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
     suspend fun poll(maxRecords: Int? = null, timeout: Duration? = null): ConsumerRecords<TKey, TValue>
     suspend fun commitSync()
     suspend fun seek(sequence: Long)
-    suspend fun heartbeat(): HeartbeatResponse
+    suspend fun heartbeat()
     suspend fun metadata(): MetadataResponse
 
     data class Config<TKey, TValue>(
@@ -145,8 +145,16 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             this.lastDeliveredSequence = sequence
         }
 
-        override suspend fun heartbeat(): HeartbeatResponse {
-            TODO("Not yet implemented")
+        override suspend fun heartbeat() {
+            val token = this.leaseToken ?: return
+
+            val response = client.postCBOR(
+                operation = "heartbeat",
+                body = HeartbeatRequest(leaseToken = token)
+            )
+            val heartbeat = response.body<HeartbeatResponse>()
+
+            this.leaseToken = heartbeat.leaseToken
         }
 
         override suspend fun metadata(): MetadataResponse {

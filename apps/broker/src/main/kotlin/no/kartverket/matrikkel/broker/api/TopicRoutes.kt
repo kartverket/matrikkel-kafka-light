@@ -48,7 +48,7 @@ fun Route.topicRoutes(
                         correlationId == null -> badRequest("invalid_request", "Missing or invalid ${HttpHeaders.XCorrelationId} header")
                         request.idempotencyKey.isBlank() -> badRequest("invalid_request", "idempotencyKey cannot be blank")
                         request.records.size !in 1.. 1000 -> badRequest("invalid_request", "number of records must be in range 1..1000")
-                        !topic.tombstonesAllowed && request.records.any { it.payload == null } -> badRequest("tombstone_not_allow", "Payload cannot be null")
+                        !topic.tombstonesAllowed && request.records.any { it.payload == null } -> badRequest("tombstones_not_allowed", "Payload cannot be null")
                         request.records.any { it.key.isEmpty() } -> badRequest("invalid_request", "recordKey cannot be blank")
                         else -> {
                             recordsService.publish(
@@ -135,15 +135,23 @@ fun Route.topicRoutes(
             }
 
             post("heartbeat") {
+                val topic = call.topicParam()
+                val identity = call.serviceIdentity()
+                val correlationId = Uuid.parseOrNull(call.request.headers[HttpHeaders.XCorrelationId] ?: "")
+
                 call.respondResult(
-                    recordsService.heartbeat(
-                        ctx = Records.Service.Ctx(
-                            topic = call.topicParam(),
-                            identity = call.serviceIdentity(),
-                            correlationId = Uuid.parse("")
-                        ),
-                        request = call.receive(),
-                    )
+                    when {
+                        !topic.acl.canConsume(identity) -> forbidden()
+                        correlationId == null -> badRequest("invalid_request", "Missing or invalid ${HttpHeaders.XCorrelationId} header")
+                        else -> recordsService.heartbeat(
+                            ctx = Records.Service.Ctx(
+                                topic = topic,
+                                identity = identity,
+                                correlationId = correlationId,
+                            ),
+                            request = call.receive(),
+                        )
+                    }
                 )
             }
         }
@@ -170,7 +178,7 @@ private fun ApplicationCall.topicParam(): Topic {
 private fun ApplicationCall.serviceIdentity(): ServiceIdentity {
     val subject = principal<JWTPrincipal>()?.subject
     if (subject.isNullOrBlank()) {
-        throw ServiceException.unauthorized("unauthorized", "Missing topic path parameter")
+        throw ServiceException.unauthorized("unauthorized", "Missing service identity")
     }
     return ServiceIdentity(subject)
 }
