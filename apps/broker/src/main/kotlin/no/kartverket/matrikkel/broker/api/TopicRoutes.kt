@@ -12,6 +12,7 @@ import no.kartverket.matrikkel.broker.domain.ServiceIdentity
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
 import no.kartverket.matrikkel.broker.service.records.Records
+import no.kartverket.matrikkel.kafkaclient.MetadataResponse
 import no.kartverket.matrikkel.kafkaclient.PollRequest
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
 import kotlin.uuid.Uuid
@@ -22,6 +23,19 @@ fun Route.topicRoutes(
 ) {
     with(topicCatalog) {
         route("/topics/{topic}") {
+            get("metadata") {
+                val topic = call.topicParam()
+                val identity = call.serviceIdentity()
+                call.respond(
+                    MetadataResponse(
+                        topic = topic.name,
+                        identity = identity.value,
+                        canPublish = topic.acl.canPublish(identity),
+                        canConsume = topic.acl.canConsume(identity),
+                    )
+                )
+            }
+
             post("publish") {
                 val topic = call.topicParam()
                 val identity = call.serviceIdentity()

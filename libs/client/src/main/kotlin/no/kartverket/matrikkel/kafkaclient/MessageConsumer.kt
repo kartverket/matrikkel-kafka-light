@@ -33,6 +33,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
     suspend fun commitSync()
     suspend fun seek(sequence: Long)
     suspend fun heartbeat(): HeartbeatResponse
+    suspend fun metadata(): MetadataResponse
 
     data class Config<TKey, TValue>(
         val server: Url,
@@ -146,6 +147,15 @@ interface MessageConsumer<TKey, TValue> : Closeable {
 
         override suspend fun heartbeat(): HeartbeatResponse {
             TODO("Not yet implemented")
+        }
+
+        override suspend fun metadata(): MetadataResponse {
+            return client.get {
+                url.takeFrom(config.server).appendPathSegments("topics", config.topic, "metadata")
+                header(HttpHeaders.XCorrelationId, config.correlationIdProvider())
+                accept(ContentType.Application.Cbor)
+                contentType(ContentType.Application.Cbor)
+            }.body()
         }
 
         override fun close() {

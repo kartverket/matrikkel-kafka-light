@@ -88,3 +88,11 @@ class HeartbeatRequest
 
 @Serializable
 class HeartbeatResponse
+
+@Serializable
+data class MetadataResponse(
+    val topic: String,
+    val identity: String,
+    val canPublish: Boolean,
+    val canConsume: Boolean,
+)
