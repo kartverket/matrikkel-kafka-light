@@ -197,3 +197,6 @@ It supports two modes (decided by which `.env` file it loads);
 - ~~local-compose.env (only used by docker-compose)~~
 
 Additionally, you may start both the broker and PostgreSQL using `./gradlew apps:broker:build && docker compose up --build`
+(Only PostgreSQL: docker compose up -d postgres)
+
+Verify that the application is up and running by visiting [http://localhost:8081/internal/isReady](http://localhost:8081/internal/isReady).
