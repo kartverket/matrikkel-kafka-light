@@ -84,10 +84,14 @@ data class SeekRequest(
 class SeekResponse
 
 @Serializable
-class HeartbeatRequest
+data class HeartbeatRequest(
+    val leaseToken: String,
+)
 
 @Serializable
-class HeartbeatResponse
+data class HeartbeatResponse(
+    val leaseToken: String
+)
 
 @Serializable
 data class MetadataResponse(
