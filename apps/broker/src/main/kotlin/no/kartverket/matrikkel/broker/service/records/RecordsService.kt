@@ -68,11 +68,13 @@ object Records {
             ctx: Service.Ctx,
             request: PollRequest
         ): Result<PollResponse> {
-            return dataSource.withTransaction {
-                withLease(ctx.topic, request.consumerGroup, request.instanceId) { lease ->
-                    val offset = getOffset(ctx.topic, request.consumerGroup, request.initialOffsetPolicy)
-                    val polledRecords = pollRecords(ctx.topic, request.maxRecords, offset)
-                    PollResponse(polledRecords, lease.token)
+            return runCatching {
+                dataSource.withTransaction {
+                    withLease(ctx.topic, request.consumerGroup, request.instanceId) { lease ->
+                        val offset = getOffset(ctx.topic, request.consumerGroup, request.initialOffsetPolicy)
+                        val polledRecords = pollRecords(ctx.topic, request.maxRecords, offset)
+                        PollResponse(polledRecords, lease.token)
+                    }
                 }
             }
         }
@@ -81,13 +83,15 @@ object Records {
             ctx: Service.Ctx,
             request: CommitRequest
         ): Result<CommitResponse> {
-            return dataSource.withTransaction {
-                withLease(ctx.topic, request.leaseToken) { lease ->
-                    requireSequenceNotLessThanCurrentOffset(ctx.topic, request.sequence)
-                    requireSequenceNotAheadOfTopic(ctx.topic, request.sequence)
+            return runCatching {
+                dataSource.withTransaction {
+                    withLease(ctx.topic, request.leaseToken) { lease ->
+                        requireSequenceNotLessThanCurrentOffset(ctx.topic, request.sequence)
+                        requireSequenceNotAheadOfTopic(ctx.topic, request.sequence)
 
-                    OffsetRepository.setOffset(ctx.topic, lease.consumerGroup, request.sequence)
-                    CommitResponse(leaseToken = lease.token)
+                        OffsetRepository.setOffset(ctx.topic, lease.consumerGroup, request.sequence)
+                        CommitResponse(leaseToken = lease.token)
+                    }
                 }
             }
         }
@@ -112,9 +116,11 @@ object Records {
             ctx: Service.Ctx,
             request: HeartbeatRequest
         ): Result<HeartbeatResponse> {
-            return dataSource.withTransaction {
-                withLease(ctx.topic, request.leaseToken) { lease ->
-                    HeartbeatResponse(leaseToken = lease.token)
+            return runCatching {
+                dataSource.withTransaction {
+                    withLease(ctx.topic, request.leaseToken) { lease ->
+                        HeartbeatResponse(leaseToken = lease.token)
+                    }
                 }
             }
         }

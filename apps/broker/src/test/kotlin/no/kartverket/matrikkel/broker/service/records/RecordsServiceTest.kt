@@ -270,7 +270,7 @@ class RecordsServiceTest : WithDatabase {
                 OffsetRepository.getOffsetOrNull(topic, consumerGroup)
             }
         }
-        assertThat(initialOffset).isSuccess().isEqualTo(1)
+        assertThat(initialOffset).isEqualTo(1)
         releaseLease(topic)
 
         val result = service.seek(ctx, SeekRequest(consumerGroup, 0L))
@@ -281,7 +281,7 @@ class RecordsServiceTest : WithDatabase {
                 OffsetRepository.getOffsetOrNull(topic, consumerGroup)
             }
         }
-        assertThat(offset).isSuccess().isEqualTo(0)
+        assertThat(offset).isEqualTo(0)
     }
 
 
