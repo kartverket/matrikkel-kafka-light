@@ -11,7 +11,7 @@ import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
 import no.kartverket.matrikkel.broker.service.records.OffsetRepository.getOffset
 import no.kartverket.matrikkel.broker.service.records.OffsetRepository.getOffsetOrNull
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.currentHeadForTopic
-import no.kartverket.matrikkel.broker.service.records.RecordsRepository.findExistingPublishedRecord
+import no.kartverket.matrikkel.broker.service.records.RecordsRepository.findExistingBatchPublish
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.insertRecords
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.pollRecords
 import no.kartverket.matrikkel.kafkaclient.*
@@ -46,8 +46,7 @@ object Records {
             return runCatching {
                 dataSource.withTransaction {
                     DbMutex.withLock(PublishLock, ctx.topic.name) {
-                        val lastRecord = request.records.last()
-                        val existing = findExistingPublishedRecord(ctx.topic, ctx.identity, request.idempotencyKey, lastRecord.key)
+                        val existing = findExistingBatchPublish(ctx.topic, ctx.identity, request.idempotencyKey)
                         if (existing != null) {
                             existing
                         } else {
