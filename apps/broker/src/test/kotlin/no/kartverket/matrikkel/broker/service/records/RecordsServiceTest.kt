@@ -115,7 +115,7 @@ class RecordsServiceTest : WithDatabase {
     }
 
     @Test
-    fun `failed publish should roll back all records in the batch`(): Unit = runBlocking {
+    fun `duplicated messages in a batch should both be stored`(): Unit = runBlocking {
         val service = Records.ServiceImpl(dataSource())
         val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
 
@@ -130,12 +130,12 @@ class RecordsServiceTest : WithDatabase {
 
         val result = service.publish(ctx, request)
 
-        assertThat(result).isFailure()
+        assertThat(result).isSuccess()
 
         val topicHead = dataSource().withSession {
             currentHeadForTopic(topic)
         }
-        assertThat(topicHead).isEqualTo(0L)
+        assertThat(topicHead).isEqualTo(2L)
     }
 
     @Test

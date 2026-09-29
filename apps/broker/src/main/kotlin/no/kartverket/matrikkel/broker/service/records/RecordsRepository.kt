@@ -18,19 +18,20 @@ import kotlin.uuid.toJavaUuid
 
 object RecordsRepository {
     context(tx: Session)
-    fun findExistingPublishedRecord(
+    fun findExistingBatchPublish(
         topic: Topic,
         identity: ServiceIdentity,
         idempotencyKey: String,
-        recordKey: ByteArray,
     ): PublishResponse? {
         @Language("SQL")
         val query = queryOf(
             """
-            SELECT sequence, record_key, published_at
+            SELECT sequence, published_at
             FROM records
-            WHERE topic = ? AND producer_identity = ? AND idempotency_key = ? AND record_key = ?
-        """.trimIndent(), topic.name, identity.value, idempotencyKey, recordKey
+            WHERE topic = ? AND producer_identity = ? AND idempotency_key = ?
+            ORDER BY sequence DESC
+            LIMIT 1
+        """.trimIndent(), topic.name, identity.value, idempotencyKey
         )
             .map {
                 PublishResponse(
@@ -90,7 +91,7 @@ object RecordsRepository {
                 :correlation_id,
                 :payload,
                 NOW()
-            ) ON CONFLICT (topic, record_key, producer_identity, idempotency_key) DO NOTHING
+            )
         """.trimIndent()
 
         var sequence = initialSequence
@@ -115,7 +116,9 @@ object RecordsRepository {
             sql,
             params,
         )
-        require(result.sum() == request.records.size)
+        require(result.sum() == request.records.size) {
+            "Expected to insert ${request.records.size} records, but got ${result.sum()} (topic=${topic.name}, idempotencyKey=${request.idempotencyKey})"
+        }
 
         return PublishResponse(
             topic = topic.name,

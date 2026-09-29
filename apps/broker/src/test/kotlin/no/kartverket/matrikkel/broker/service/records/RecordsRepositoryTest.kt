@@ -15,7 +15,7 @@ import no.kartverket.matrikkel.broker.repository.withTransaction
 import no.kartverket.matrikkel.broker.service.records.LeaseRepository.withLease
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.currentHeadForTopic
-import no.kartverket.matrikkel.broker.service.records.RecordsRepository.findExistingPublishedRecord
+import no.kartverket.matrikkel.broker.service.records.RecordsRepository.findExistingBatchPublish
 import no.kartverket.matrikkel.broker.service.records.RecordsRepository.pollRecords
 import no.kartverket.matrikkel.kafkaclient.PublishRecord
 import no.kartverket.matrikkel.kafkaclient.PublishRequest
@@ -69,7 +69,7 @@ class RecordsRepositoryTest : WithDatabase {
     @Test
     fun `should return null if no previous equal message is published`(): Unit = runBlocking {
         val existingRecord: PublishResponse? = dataSource().withSession {
-            findExistingPublishedRecord(topic, identity, idempotencyKey, "random".toByteArray())
+            findExistingBatchPublish(topic, identity, idempotencyKey)
         }
 
         assertThat(existingRecord).isNull()
@@ -90,23 +90,30 @@ class RecordsRepositoryTest : WithDatabase {
     }
 
     @Test
-    fun `should return failure on duplicate insert`(): Unit = runBlocking {
-        dataSource().withTransaction {
-            insertRecord()
-            assertFailure { insertRecord() }
-        }
-    }
-
-    @Test
     fun `should return existing record`(): Unit = runBlocking {
+        val idempotencyKey = Uuid.random().toHexString()
         val existingRecord: PublishResponse? = dataSource().withTransaction {
-            insertRecord()
-            findExistingPublishedRecord(topic, identity, idempotencyKey, record.key)
+            insertRecords(10)
+            DbMutex.withLock(TestLock, topic.name) {
+                RecordsRepository.insertRecords(
+                    topic = topic,
+                    identity = identity,
+                    correlationId = Uuid.random(),
+                    request = PublishRequest(
+                        idempotencyKey = idempotencyKey,
+                        records = listOf(
+                            record.copy(key = "key1".toByteArray()),
+                            record.copy(key = "key2".toByteArray()),
+                        ),
+                    ),
+                )
+            }
+            findExistingBatchPublish(topic, identity, idempotencyKey)
         }
 
         assertThat(existingRecord).isNotNull().all {
             prop(PublishResponse::topic).isEqualTo(topic.name)
-            prop(PublishResponse::sequence).isEqualTo(1)
+            prop(PublishResponse::sequence).isEqualTo(12)
             prop(PublishResponse::idempotencyKey).isEqualTo(idempotencyKey)
             prop(PublishResponse::publishedAt).isApproxNow(1.seconds)
         }
