@@ -117,7 +117,10 @@ object RecordsRepository {
                 sql,
                 params,
             )
-            require(result.sum() == request.records.size)
+            require(result.sum() == request.records.map { it.key }.toSet().size) {
+                "Expected to insert ${request.records.size} records but inserted ${result.sum()} " +
+                        "(topic=${topic.name}, idempotencyKey=${request.idempotencyKey})"
+            }
 
             PublishResponse(
                 topic = topic.name,
