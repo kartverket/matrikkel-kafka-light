@@ -115,6 +115,30 @@ class RecordsServiceTest : WithDatabase {
     }
 
     @Test
+    fun `failed publish should roll back all records in the batch`(): Unit = runBlocking {
+        val service = Records.ServiceImpl(dataSource())
+        val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
+
+        val record = PublishRecord(
+            key = "duplicate-key".toByteArray(),
+            payload = "first".toByteArray(),
+        )
+        val request = PublishRequest(
+            idempotencyKey = "batch-idempotency-key",
+            records = listOf(record, record),
+        )
+
+        val result = service.publish(ctx, request)
+
+        assertThat(result).isFailure()
+
+        val topicHead = dataSource().withSession {
+            currentHeadForTopic(topic)
+        }
+        assertThat(topicHead).isEqualTo(0L)
+    }
+
+    @Test
     fun `should return Pollresponse with lease and empty list of records`(): Unit = runBlocking {
         val service = Records.ServiceImpl(dataSource())
         val ctx = Records.Service.Ctx(topic, identity, Uuid.random())
@@ -246,7 +270,7 @@ class RecordsServiceTest : WithDatabase {
                 OffsetRepository.getOffsetOrNull(topic, consumerGroup)
             }
         }
-        assertThat(initialOffset).isSuccess().isEqualTo(1)
+        assertThat(initialOffset).isEqualTo(1)
         releaseLease(topic)
 
         val result = service.seek(ctx, SeekRequest(consumerGroup, 0L))
@@ -257,7 +281,7 @@ class RecordsServiceTest : WithDatabase {
                 OffsetRepository.getOffsetOrNull(topic, consumerGroup)
             }
         }
-        assertThat(offset).isSuccess().isEqualTo(0)
+        assertThat(offset).isEqualTo(0)
     }
 
 

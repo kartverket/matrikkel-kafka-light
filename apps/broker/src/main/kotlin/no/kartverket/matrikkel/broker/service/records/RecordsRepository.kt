@@ -69,7 +69,7 @@ object RecordsRepository {
         correlationId: Uuid,
         request: PublishRequest,
         initialSequence: Long = currentHeadForTopic(topic),
-    ): Result<PublishResponse> {
+    ): PublishResponse {
         @Language("SQL")
         val sql = """
             INSERT INTO records (
@@ -106,26 +106,23 @@ object RecordsRepository {
             )
         }
 
+        val dbNow: Instant = requireNotNull(
+            tx.single(queryOf("SELECT now()")) {
+                it.instant(1).toKotlinInstant()
+            }
+        )
+        val result = tx.batchPreparedNamedStatement(
+            sql,
+            params,
+        )
+        require(result.sum() == request.records.size)
 
-        return runCatching {
-            val dbNow: Instant = requireNotNull(
-                tx.single(queryOf("SELECT now()")) {
-                    it.instant(1).toKotlinInstant()
-                }
-            )
-            val result = tx.batchPreparedNamedStatement(
-                sql,
-                params,
-            )
-            require(result.sum() == request.records.size)
-
-            PublishResponse(
-                topic = topic.name,
-                sequence = sequence,
-                idempotencyKey = request.idempotencyKey,
-                publishedAt = dbNow,
-            )
-        }
+        return PublishResponse(
+            topic = topic.name,
+            sequence = sequence,
+            idempotencyKey = request.idempotencyKey,
+            publishedAt = dbNow,
+        )
     }
 
     context(tx: Session, _: LeaseStatus.Acquired)

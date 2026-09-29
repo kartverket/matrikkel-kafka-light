@@ -1,6 +1,7 @@
 package no.kartverket.no.kartverket.matrikkel.broker.service.records
 
 import assertk.all
+import assertk.assertFailure
 import assertk.assertThat
 import assertk.assertions.*
 import kotlinx.coroutines.runBlocking
@@ -80,7 +81,7 @@ class RecordsRepositoryTest : WithDatabase {
             insertRecord()
         }
 
-        assertThat(insertedRow).isSuccess().isNotNull().all {
+        assertThat(insertedRow).all {
             prop(PublishResponse::topic).isEqualTo(topic.name)
             prop(PublishResponse::sequence).isEqualTo(1)
             prop(PublishResponse::idempotencyKey).isEqualTo(idempotencyKey)
@@ -92,9 +93,7 @@ class RecordsRepositoryTest : WithDatabase {
     fun `should return failure on duplicate insert`(): Unit = runBlocking {
         dataSource().withTransaction {
             insertRecord()
-            val insertedRow = insertRecord()
-
-            assertThat(insertedRow).isFailure()
+            assertFailure { insertRecord() }
         }
     }
 
@@ -122,7 +121,7 @@ class RecordsRepositoryTest : WithDatabase {
             }
         }
 
-        assertThat(polledRecords).isSuccess().isEmpty()
+        assertThat(polledRecords).isEmpty()
     }
 
     @Test
@@ -134,7 +133,7 @@ class RecordsRepositoryTest : WithDatabase {
             }
         }
 
-        assertThat(polledRecords).isSuccess()
+        assertThat(polledRecords)
             .given {
                 assertThat(it).hasSize(10)
                 assertThat(it.first().sequence).isEqualTo(1)
@@ -151,7 +150,7 @@ class RecordsRepositoryTest : WithDatabase {
             }
         }
 
-        assertThat(polledRecords).isSuccess()
+        assertThat(polledRecords)
             .given {
                 assertThat(it).hasSize(10)
                 assertThat(it.first().sequence).isEqualTo(41)
@@ -171,7 +170,7 @@ class RecordsRepositoryTest : WithDatabase {
             }
         }
 
-        assertThat(polledRecords).isSuccess()
+        assertThat(polledRecords)
             .given {
                 assertThat(it).hasSize(maxRecords)
                 assertThat(it.map { record -> record.sequence }).isEqualTo((offset+1..offset + maxRecords).toList())
@@ -187,7 +186,7 @@ class RecordsRepositoryTest : WithDatabase {
             }
         }
 
-        assertThat(polledRecords).isSuccess()
+        assertThat(polledRecords)
             .given {
                 assertThat(it).hasSize(5)
                 assertThat(it.first().sequence).isEqualTo(1)
@@ -204,7 +203,7 @@ class RecordsRepositoryTest : WithDatabase {
     }
 
     context(tx: TransactionalSession)
-    private fun insertRecord(newIdempotencyKey: String = idempotencyKey): Result<PublishResponse> =
+    private fun insertRecord(newIdempotencyKey: String = idempotencyKey): PublishResponse =
         DbMutex.withLock(TestLock, topic.name) {
             RecordsRepository.insertRecords(
                 topic = topic,

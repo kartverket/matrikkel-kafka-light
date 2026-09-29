@@ -1,21 +1,11 @@
 package no.kartverket.no.kartverket.matrikkel.broker.service.records
 
 import assertk.all
+import assertk.assertFailure
 import assertk.assertThat
-import assertk.assertions.hasMessage
-import assertk.assertions.isEqualTo
-import assertk.assertions.isFailure
-import assertk.assertions.isInstanceOf
-import assertk.assertions.isNotEmpty
-import assertk.assertions.isNotNull
-import assertk.assertions.isSuccess
-import assertk.assertions.prop
-import io.ktor.http.HttpStatusCode
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.runBlocking
+import assertk.assertions.*
+import io.ktor.http.*
+import kotlinx.coroutines.*
 import no.kartverket.matrikkel.broker.ServiceException
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
@@ -107,31 +97,30 @@ class LeaseRepositoryTest : WithDatabase {
             }
         }
 
-        assertThat(leaseResult).isSuccess()
-            .given {
-                assertThat(it).isEqualTo("Lease acquired")
-            }
+        assertThat(leaseResult).isEqualTo("Lease acquired")
     }
 
     @Test
     fun `withLease using leaseToken requires a lease to exist`(): Unit = runBlocking {
-        val leaseResult = dataSource().withTransaction {
-            withLease(topic, "leasetoken") {
-                "Lease acquired"
+        assertFailure {
+            dataSource().withTransaction {
+                withLease(topic, "leasetoken") {
+                    "Lease acquired"
+                }
             }
         }
-        assertThat(leaseResult).isFailure()
     }
 
     @Test
     fun `withLease using expired leaseToken should fail`(): Unit = runBlocking {
         val lease = createLease(topic, consumerGroup, currentTime - 2.minutes)
-        val leaseResult = dataSource().withTransaction {
-            withLease(topic, leaseToken = lease.token) {
-                "Lease acquired"
+        assertFailure {
+            dataSource().withTransaction {
+                withLease(topic, leaseToken = lease.token) {
+                    "Lease acquired"
+                }
             }
         }
-        assertThat(leaseResult).isFailure()
     }
 
     @Test
@@ -142,34 +131,30 @@ class LeaseRepositoryTest : WithDatabase {
                 "Lease acquired"
             }
         }
-        assertThat(leaseResult).isSuccess()
+        assertThat(leaseResult).isEqualTo("Lease acquired")
     }
 
     @Test
     fun `withLease should give failure if lease is taken`(): Unit = runBlocking {
         createLease(topic, consumerGroup, currentTime)
 
-        val leaseResult = dataSource().withTransaction {
-            withLease(topic, consumerGroup, "dummy_instance_id") {
-                error("Should not acquire lease")
+        assertFailure {
+            dataSource().withTransaction {
+                withLease(topic, consumerGroup, "dummy_instance_id") {
+                    error("Should not acquire lease")
+                }
             }
-        }
-
-        assertThat(leaseResult).isFailure()
-            .given {
-                assertThat(it)
-                    .isInstanceOf(ServiceException::class)
-                    .all {
-                        hasMessage("Could not acquire lease")
-                        prop(ServiceException::status).isEqualTo(HttpStatusCode.Locked)
-                    }
+        }.isInstanceOf(ServiceException::class)
+            .all {
+                hasMessage("Could not acquire lease")
+                prop(ServiceException::status).isEqualTo(HttpStatusCode.Locked)
             }
     }
 
 
     @Test
     fun `should acquire lease that is expired`(): Unit = runBlocking {
-        createLease(topic, consumerGroup,currentTime - 2.minutes)
+        createLease(topic, consumerGroup, currentTime - 2.minutes)
 
         val leaseStatus: LeaseStatus = dataSource().withTransaction {
             acquireLease(

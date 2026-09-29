@@ -41,14 +41,12 @@ object LeaseRepository {
         leaseToken: String,
         now: Instant = Clock.System.now(),
         fn: context(LeaseStatus.Acquired) (Lease) -> T
-    ): Result<T> {
+    ): T {
         return when(val leaseStatus = getAndRefreshLease(topic, leaseToken, now)) {
-            is LeaseStatus.Locked -> Result.failure(ServiceException.locked(message = "Could not find lease"))
+            is LeaseStatus.Locked -> throw ServiceException.locked(message = "Could not find lease")
             is LeaseStatus.Acquired -> {
                 with(leaseStatus) {
-                    runCatching {
-                        fn(lease)
-                    }
+                    fn(lease)
                 }
             }
         }
@@ -61,14 +59,12 @@ object LeaseRepository {
         instanceId: String,
         now: Instant = Clock.System.now(),
         fn: context(LeaseStatus.Acquired) (Lease) -> T
-    ): Result<T> {
+    ): T {
         return when(val leaseStatus = acquireLease(topic, consumerGroup, instanceId, now)) {
-            is LeaseStatus.Locked -> Result.failure(ServiceException.locked(message = "Could not acquire lease"))
+            is LeaseStatus.Locked -> throw ServiceException.locked(message = "Could not acquire lease")
             is LeaseStatus.Acquired -> {
                 with(leaseStatus) {
-                    runCatching {
-                        fn(lease)
-                    }
+                    fn(lease)
                 }
             }
         }

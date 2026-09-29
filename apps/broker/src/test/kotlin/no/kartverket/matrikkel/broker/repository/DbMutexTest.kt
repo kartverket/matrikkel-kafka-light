@@ -1,5 +1,6 @@
 package no.kartverket.no.kartverket.matrikkel.broker.repository
 
+import assertk.assertFailure
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import kotlinx.coroutines.Dispatchers
@@ -12,7 +13,6 @@ import no.kartverket.matrikkel.broker.repository.DbMutex
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import kotlin.uuid.Uuid
 
 class DbMutexTest : WithDatabase {
@@ -37,7 +37,7 @@ class DbMutexTest : WithDatabase {
 
     @Test
     fun `should fail if trying without locks`() {
-        assertThrows<Exception> {
+        assertFailure {
             insertInParallell(locking = false)
         }
     }

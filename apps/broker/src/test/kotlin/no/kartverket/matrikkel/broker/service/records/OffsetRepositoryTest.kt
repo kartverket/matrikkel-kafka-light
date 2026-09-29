@@ -1,5 +1,6 @@
 package no.kartverket.no.kartverket.matrikkel.broker.service.records
 
+import assertk.assertFailure
 import assertk.assertThat
 import assertk.assertions.hasSize
 import assertk.assertions.isEqualTo
@@ -56,7 +57,7 @@ class OffsetRepositoryTest : WithDatabase {
             }
         }
 
-        assertThat(offset).isSuccess().isEqualTo(0)
+        assertThat(offset).isEqualTo(0)
     }
 
     @Test
@@ -70,7 +71,7 @@ class OffsetRepositoryTest : WithDatabase {
             }
         }
 
-        assertThat(offset).isSuccess().isEqualTo(10)
+        assertThat(offset).isEqualTo(10)
     }
 
     @Test
@@ -82,7 +83,7 @@ class OffsetRepositoryTest : WithDatabase {
             }
         }
 
-        assertThat(offset).isSuccess().isEqualTo(0)
+        assertThat(offset).isEqualTo(0)
     }
 
     @Test
@@ -111,13 +112,13 @@ class OffsetRepositoryTest : WithDatabase {
 
     @Test
     fun `should fail is offset does not exist`(): Unit = runBlocking {
-        val offset = dataSource().withTransaction {
-            withLease(topic, consumerGroup, instanceId) {
-                OffsetRepository.setOffset(topic, consumerGroup, 100L)
+        assertFailure {
+            dataSource().withTransaction {
+                withLease(topic, consumerGroup, instanceId) {
+                    OffsetRepository.setOffset(topic, consumerGroup, 100L)
+                }
             }
         }
-
-        assertThat(offset).isFailure()
     }
 
     @Test
@@ -130,7 +131,7 @@ class OffsetRepositoryTest : WithDatabase {
             }
         }
 
-        assertThat(offset).isSuccess().isEqualTo(100L)
+        assertThat(offset).isEqualTo(100L)
     }
 
     private suspend fun createRecord(numRcords: Int) {
