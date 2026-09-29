@@ -43,21 +43,22 @@ object Records {
             ctx: Service.Ctx,
             request: PublishRequest
         ): Result<PublishResponse> {
-            return dataSource.withTransaction {
-                DbMutex.withLock(PublishLock, ctx.topic.name) {
-                    val lastRecord = request.records.last()
-                    val existing =
-                        findExistingPublishedRecord(ctx.topic, ctx.identity, request.idempotencyKey, lastRecord.key)
-                    if (existing != null) {
-                        Result.success(existing)
-                    } else {
-                        insertRecords(
-                            topic = ctx.topic,
-                            identity = ctx.identity,
-                            correlationId = ctx.correlationId,
-                            request = request,
-                            initialSequence = currentHeadForTopic(ctx.topic)
-                        )
+            return runCatching {
+                dataSource.withTransaction {
+                    DbMutex.withLock(PublishLock, ctx.topic.name) {
+                        val lastRecord = request.records.last()
+                        val existing = findExistingPublishedRecord(ctx.topic, ctx.identity, request.idempotencyKey, lastRecord.key)
+                        if (existing != null) {
+                            existing
+                        } else {
+                            insertRecords(
+                                topic = ctx.topic,
+                                identity = ctx.identity,
+                                correlationId = ctx.correlationId,
+                                request = request,
+                                initialSequence = currentHeadForTopic(ctx.topic)
+                            )
+                        }
                     }
                 }
             }

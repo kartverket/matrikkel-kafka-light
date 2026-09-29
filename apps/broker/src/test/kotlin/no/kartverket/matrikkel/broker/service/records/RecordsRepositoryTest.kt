@@ -22,6 +22,7 @@ import no.kartverket.matrikkel.kafkaclient.PublishResponse
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.isApproxNow
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -80,7 +81,7 @@ class RecordsRepositoryTest : WithDatabase {
             insertRecord()
         }
 
-        assertThat(insertedRow).isSuccess().isNotNull().all {
+        assertThat(insertedRow).all {
             prop(PublishResponse::topic).isEqualTo(topic.name)
             prop(PublishResponse::sequence).isEqualTo(1)
             prop(PublishResponse::idempotencyKey).isEqualTo(idempotencyKey)
@@ -92,9 +93,7 @@ class RecordsRepositoryTest : WithDatabase {
     fun `should return failure on duplicate insert`(): Unit = runBlocking {
         dataSource().withTransaction {
             insertRecord()
-            val insertedRow = insertRecord()
-
-            assertThat(insertedRow).isFailure()
+            assertThrows<Exception> { insertRecord() }
         }
     }
 
@@ -204,7 +203,7 @@ class RecordsRepositoryTest : WithDatabase {
     }
 
     context(tx: TransactionalSession)
-    private fun insertRecord(newIdempotencyKey: String = idempotencyKey): Result<PublishResponse> =
+    private fun insertRecord(newIdempotencyKey: String = idempotencyKey): PublishResponse =
         DbMutex.withLock(TestLock, topic.name) {
             RecordsRepository.insertRecords(
                 topic = topic,
