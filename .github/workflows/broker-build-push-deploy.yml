@@ -198,6 +198,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
   deploy-prod:
     name: Deploy to prod
     runs-on: ubuntu-latest
@@ -205,8 +206,6 @@ jobs:
     needs:
       - version
       - deploy-prod-notifier
-    environment:
-      name: production
     permissions:
       actions: read
       contents: read
