@@ -214,6 +214,28 @@ class IntegrationTest : WithDatabase {
         }
     }
 
+    @Test
+    fun `producing a lot of messages`() {
+        val records = buildList {
+            repeat(4) { iteration ->
+                repeat(50) { message ->
+                    add(ProducerRecord(key = "$message", value = "$iteration-$message"))
+                }
+            }
+        }
+        runIntegrationTest { producerFactory, consumerFactory ->
+            producerFactory("test", "first-topic").use { producer ->
+                val pendingSends = records.map {
+                    producer.send(it)
+                }
+
+                pendingSends.awaitAll()
+
+                println("all good")
+            }
+        }
+    }
+
     private suspend fun MessageProducer<String, String>.produceMessages(
         block: suspend SequenceScope<ProducerRecord<String, String>>.() -> Unit
     ): MessageProducer<String, String> {
