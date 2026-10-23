@@ -4,4 +4,4 @@ COPY apps/broker/build/install/broker /app
 
 EXPOSE 8081
 
-ENTRYPOINT ["/app/bin/broker"]
+ENTRYPOINT ["java", "-cp", "/app/lib/*", "no.kartverket.matrikkel.broker.MainKt"]
