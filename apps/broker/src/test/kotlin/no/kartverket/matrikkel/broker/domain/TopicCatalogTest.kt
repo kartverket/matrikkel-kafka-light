@@ -1,8 +1,13 @@
 package no.kartverket.matrikkel.broker.domain
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
 class TopicCatalogTest {
@@ -28,6 +33,42 @@ class TopicCatalogTest {
 
         assertTrue(topic.acl.canPublish(identity))
         assertTrue(topic.acl.canConsume(identity))
+    }
+
+    @Test
+    fun `policies reject non-positive durations`() {
+        assertFailsWith<IllegalArgumentException> { CleanupPolicy.Delete(Duration.ZERO) }
+        assertFailsWith<IllegalArgumentException> { CleanupPolicy.Compact(minCompactionLag = Duration.ZERO) }
+        assertFailsWith<IllegalArgumentException> { CleanupPolicy.Compact(tombstoneRetention = (-1).hours) }
+    }
+
+    @Test
+    fun `topic rejects more than one delete or compact policy`() {
+        assertFailsWith<IllegalArgumentException> {
+            testtopic.copy(
+                cleanupPolicies = setOf(
+                    CleanupPolicy.Delete(2.days),
+                    CleanupPolicy.Delete(3.days)
+                )
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            testtopic.copy(
+                cleanupPolicies = setOf(
+                    CleanupPolicy.Compact(minCompactionLag = 1.days),
+                    CleanupPolicy.Compact(minCompactionLag = 2.days),
+                )
+            )
+        }
+    }
+
+    @Test
+    fun `topic accepts delete and compact together`() {
+        val policies = setOf(CleanupPolicy.Delete(2.days), CleanupPolicy.Compact())
+
+        val topic = testtopic.copy(cleanupPolicies = policies)
+
+        assertEquals(policies, topic.cleanupPolicies)
     }
 
     @Test

@@ -189,6 +189,27 @@ sequenceDiagram
     S-->>C1: 423 Locked
 ```
 
+## Cleanup / compaction
+Topics can opt in to cleanup with `Topic.cleanupPolicies`. The default is empty, so nothing is deleted.
+
+```kotlin
+Topic(
+    name = "MY_TOPIC",
+    acl = ...,
+    cleanupPolicies = setOf(
+        CleanupPolicy.Compact(minCompactionLag = 24.hours, tombstoneRetention = 24.hours), // defaults
+        CleanupPolicy.Delete(retention = 30.days),
+    ),
+)
+```
+
+A topic can have at most one `Compact` and one `Delete` policy. All durations must be positive.
+
+Every `cleanup.interval` (default 10 minutes) the broker cleans each topic with a policy. The latest record on a topic is never deleted.
+
+- `Delete` removes records older than `retention`.
+- `Compact` removes records that have a newer record with the same key, and tombstones (null payload) older than `tombstoneRetention`. Records younger than `minCompactionLag` are not compacted.
+
 ## Running locally
 Starting the broker locally is done by running [RunLocally](apps/broker/src/test/kotlin/no/kartverket/matrikkel/broker/RunLocally.kt).
 It supports two modes (decided by which `.env` file it loads);

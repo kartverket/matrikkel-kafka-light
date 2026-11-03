@@ -7,12 +7,18 @@ import no.kartverket.heimdall.common.ktor.plugins.security.Security
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
 class DatabaseConfiguration(
     val jdbcUrl: String,
     val userCredential: Credential,
     val adminCredential: Credential,
+)
+
+class CleanupConfiguration(
+    val interval: Duration = 10.minutes,
+    val batchSize: Int = 1000,
 )
 
 class Configuration(
@@ -31,6 +37,7 @@ class Configuration(
         userCredential = Credential.from("DB_USER"),
         adminCredential = Credential.from("DB_ADMIN"),
     ),
+    val cleanup: CleanupConfiguration = CleanupConfiguration(),
     val topicsCatalog: TopicCatalog = TopicCatalog(
         listOf(
             Topic(
