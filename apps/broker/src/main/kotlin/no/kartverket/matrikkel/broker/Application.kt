@@ -13,6 +13,10 @@ import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.serialization.cbor.Cbor
 import no.kartverket.heimdall.common.ktor.plugins.Metrics
 import no.kartverket.heimdall.common.ktor.plugins.security.Security
@@ -21,7 +25,10 @@ import no.kartverket.heimdall.common.ktor.utils.KtorServer
 import no.kartverket.matrikkel.broker.api.topicRoutes
 import no.kartverket.matrikkel.broker.config.Configuration
 import no.kartverket.matrikkel.broker.config.DataSourceConfiguration
+import no.kartverket.matrikkel.broker.service.cleanup.Cleanup
+import no.kartverket.matrikkel.broker.service.cleanup.CleanupScheduler
 import no.kartverket.matrikkel.broker.service.records.Records
+import no.kartverket.matrikkel.broker.utils.CleanupMetricsBinder
 import no.kartverket.matrikkel.broker.utils.TopicMetricsBinder
 import org.slf4j.LoggerFactory
 import kotlin.uuid.Uuid
@@ -37,8 +44,23 @@ fun runApplication(disableSecurity: Boolean = false) {
         config.database.userCredential,
     )
 
+    val cleanupMetrics = CleanupMetricsBinder(config.topicsCatalog.topics)
+    val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     KtorServer.create(factory = Netty, port = 8081) {
         standardPlugins(config.version)
+
+        monitor.subscribe(ApplicationStarted) {
+            CleanupScheduler(
+                topics = config.topicsCatalog.topics,
+                service = Cleanup.ServiceImpl(dataSource, batchSize = config.cleanup.batchSize),
+                interval = config.cleanup.interval,
+                onCleanup = cleanupMetrics::record,
+            ).start(cleanupScope)
+        }
+        monitor.subscribe(ApplicationStopping) {
+            cleanupScope.cancel()
+        }
 
         install(Authentication) {
             if (disableSecurity) {
@@ -53,6 +75,7 @@ fun runApplication(disableSecurity: Boolean = false) {
                 topicCatalog = config.topicsCatalog,
                 dataSource = dataSource,
             )
+            meterBinders += cleanupMetrics
         }
 
         routing {
