@@ -3,7 +3,9 @@ package no.kartverket.matrikkel.broker.service.cleanup
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import no.kartverket.matrikkel.broker.domain.Topic
 import org.slf4j.LoggerFactory
@@ -19,10 +21,12 @@ class CleanupScheduler(
     private val topics = topics.filter { it.cleanupPolicies.isNotEmpty() }
 
     fun start(scope: CoroutineScope): Job = scope.launch {
-        while (true) {
+        while (scope.isActive) {
             for (topic in topics) {
                 try {
                     onCleanup(service.cleanup(topic))
+                } catch (e: TimeoutCancellationException) {
+                    log.warn("Timed out waiting for cleanup job", e)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
