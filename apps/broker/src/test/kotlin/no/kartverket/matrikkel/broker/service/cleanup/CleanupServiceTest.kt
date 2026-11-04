@@ -123,7 +123,7 @@ class CleanupServiceTest : WithDatabase {
     fun `head is never deleted even when it is an old tombstone`() {
         val topic = topicMock(policies = setOf(CleanupPolicy.Compact(tombstoneRetention = 1.hours))) {
             record(key = "A", age = 10.days)
-            record(key = "A", age = 10.days)
+            record(key = "A", age = 10.days, payload = null)
         }
 
         val result = cleanup(topic)
