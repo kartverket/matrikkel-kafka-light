@@ -38,20 +38,21 @@ class SequenceGapsAfterCleanupTest : WithDatabase {
         initialOffsetPolicy = InitialOffsetPolicy.EARLIEST,
     )
 
+    private val service: Records.Service = Records.ServiceImpl(dataSource())
+
     /** Sequences 1..5 (keys A,B,A,B,A), all old. After cleanup only 4 and 5 survive. */
-    private suspend fun seedAndCleanup(): Records.Service {
+    private suspend fun seedAndCleanup() {
         val old = Clock.System.now() - 10.days
         dataSource().insertRawRecords(
             topic.name,
             listOf("A", "B", "A", "B", "A").mapIndexed { i, key -> RawRecord(i + 1L, key, old) }
         )
         Cleanup.ServiceImpl(dataSource()).cleanup(topic)
-        return Records.ServiceImpl(dataSource())
     }
 
     @Test
     fun `poll skips removed sequences and returns survivors in order`(): Unit = runBlocking {
-        val service = seedAndCleanup()
+        seedAndCleanup()
 
         val poll = service.poll(ctx, pollRequest).getOrThrow()
 
@@ -60,7 +61,7 @@ class SequenceGapsAfterCleanupTest : WithDatabase {
 
     @Test
     fun `commit at a removed sequence succeeds but above head still fails`(): Unit = runBlocking {
-        val service = seedAndCleanup()
+        seedAndCleanup()
         val poll = service.poll(ctx, pollRequest).getOrThrow()
 
         assertThat(service.commit(ctx, CommitRequest(poll.leaseToken, 2L))).isSuccess()
@@ -69,7 +70,7 @@ class SequenceGapsAfterCleanupTest : WithDatabase {
 
     @Test
     fun `publish after cleanup continues from head without reusing sequences`(): Unit = runBlocking {
-        val service = seedAndCleanup()
+        seedAndCleanup()
 
         val response = service.publish(
             ctx,
