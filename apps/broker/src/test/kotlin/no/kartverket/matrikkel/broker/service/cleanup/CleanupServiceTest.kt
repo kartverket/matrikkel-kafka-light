@@ -33,17 +33,6 @@ class CleanupServiceTest : WithDatabase {
 
     private fun cleanup(topic: Topic) = runBlocking { service.cleanup(topic) }
 
-    private fun rawRecord(
-        seq: Long,
-        key: String,
-        age: Duration,
-        payload: String? = "v",
-        producer: String = "producer-a"
-    ) =
-        RawRecord(seq, key, now - age, payload, producer)
-
-    private fun seed(topic: Topic, vararg rows: RawRecord) = dataSource().insertRawRecords(topic.name, rows.toList())
-
     private fun remaining(topic: Topic) = dataSource().storedSequences(topic.name)
 
     inner class TopicBuilder(val records: MutableList<RawRecord> = mutableListOf()) {
@@ -65,7 +54,7 @@ class CleanupServiceTest : WithDatabase {
     ): Topic {
         val topic = topic(name = name, policies = policies)
         val builder = TopicBuilder().apply(fn)
-        seed(topic, *builder.records.toTypedArray())
+        dataSource().insertRawRecords(topic.name, builder.records)
         return topic
     }
 
