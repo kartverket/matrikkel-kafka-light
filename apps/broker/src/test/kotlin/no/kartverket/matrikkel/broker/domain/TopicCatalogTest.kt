@@ -35,12 +35,6 @@ class TopicCatalogTest {
         assertTrue(topic.acl.canConsume(identity))
     }
 
-    private fun rejects(vararg policies: CleanupPolicy) {
-        assertFailsWith<IllegalArgumentException> {
-            testtopic.copy(cleanupPolicies = policies.toSet())
-        }
-    }
-
     @Test
     fun `policies reject non-positive durations`() {
         assertFailsWith<IllegalArgumentException> { CleanupPolicy.Delete(Duration.ZERO) }
@@ -50,8 +44,22 @@ class TopicCatalogTest {
 
     @Test
     fun `topic rejects more than one delete or compact policy`() {
-        rejects(CleanupPolicy.Delete(2.days), CleanupPolicy.Delete(3.days))
-        rejects(CleanupPolicy.Compact(minCompactionLag = 1.days), CleanupPolicy.Compact(minCompactionLag = 2.days))
+        assertFailsWith<IllegalArgumentException> {
+            testtopic.copy(
+                cleanupPolicies = setOf(
+                    CleanupPolicy.Delete(2.days),
+                    CleanupPolicy.Delete(3.days)
+                )
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            testtopic.copy(
+                cleanupPolicies = setOf(
+                    CleanupPolicy.Compact(minCompactionLag = 1.days),
+                    CleanupPolicy.Compact(minCompactionLag = 2.days),
+                )
+            )
+        }
     }
 
     @Test
