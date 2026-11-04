@@ -7,6 +7,7 @@ import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.*
 import org.junit.jupiter.api.Test
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
@@ -14,7 +15,9 @@ import kotlin.time.Instant
 
 class CleanupServiceTest : WithDatabase {
     private val now = Instant.parse("2026-01-20T12:00:00Z")
-    private val clock = FakeClock(now)
+    private val clock = object : Clock {
+        override fun now() = now
+    }
 
     private fun topic(
         policies: Set<CleanupPolicy>,
