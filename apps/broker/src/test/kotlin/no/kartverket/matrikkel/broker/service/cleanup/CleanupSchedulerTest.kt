@@ -28,7 +28,7 @@ class CleanupSchedulerTest {
     private class RecordingService(val failOn: String? = null) : Cleanup.Service {
         val calls = CopyOnWriteArrayList<String>()
 
-        override fun cleanup(topic: Topic): Cleanup.Result {
+        override suspend fun cleanup(topic: Topic): Cleanup.Result {
             calls += topic.name
             if (topic.name == failOn) error("boom")
             return Cleanup.Result(topic.name, 0, 0, 0L)

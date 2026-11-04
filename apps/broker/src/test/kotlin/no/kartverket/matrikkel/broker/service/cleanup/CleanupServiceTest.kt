@@ -2,6 +2,7 @@ package no.kartverket.matrikkel.broker.service.cleanup
 
 import assertk.assertThat
 import assertk.assertions.isEqualTo
+import kotlinx.coroutines.runBlocking
 import no.kartverket.matrikkel.broker.domain.CleanupPolicy
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
@@ -30,8 +31,9 @@ class CleanupServiceTest : WithDatabase {
         minCleanableAge = minCleanableAge,
     )
 
-    private fun service(batchSize: Int = 1000): Cleanup.Service =
-        Cleanup.ServiceImpl(dataSource(), batchSize = batchSize, clock = clock)
+    private val service: Cleanup.Service = Cleanup.ServiceImpl(dataSource(), batchSize = 2, clock = clock)
+
+    private fun cleanup(topic: Topic) = runBlocking { service.cleanup(topic) }
 
     private fun rawRecord(
         seq: Long,
@@ -78,7 +80,7 @@ class CleanupServiceTest : WithDatabase {
             record(key = "A", age = 8.days, payload = null)
         }
 
-        val result = service().cleanup(topic)
+        val result = cleanup(topic)
 
         assertThat(result.totalDeleted).isEqualTo(0)
         assertThat(remaining(topic)).isEqualTo(listOf(1L, 2L, 3L))
@@ -94,7 +96,7 @@ class CleanupServiceTest : WithDatabase {
             record(key = "A", age = 8.days)
         }
 
-        val result = service().cleanup(topic)
+        val result = cleanup(topic)
 
         assertThat(remaining(topic)).isEqualTo(listOf(4L, 5L))
         assertThat(result.topic).isEqualTo(topic.name)
@@ -111,7 +113,7 @@ class CleanupServiceTest : WithDatabase {
             record(key = "A", age = 1.hours)
         }
 
-        val result = service().cleanup(topic)
+        val result = cleanup(topic)
 
         assertThat(remaining(topic)).isEqualTo(listOf(2L, 3L))
         assertThat(result.maxCleanableSequence).isEqualTo(1L)
@@ -124,7 +126,7 @@ class CleanupServiceTest : WithDatabase {
             record(key = "A", age = 10.days)
         }
 
-        val result = service().cleanup(topic)
+        val result = cleanup(topic)
 
         assertThat(remaining(topic)).isEqualTo(listOf(2L))
         assertThat(result.maxCleanableSequence).isEqualTo(1L)
@@ -136,7 +138,7 @@ class CleanupServiceTest : WithDatabase {
             record(key = "A", age = 10.days)
             record(key = "B", age = 10.days)
         }
-        service().cleanup(topic)
+        cleanup(topic)
 
         assertThat(remaining(topic)).isEqualTo(listOf(2L))
     }
@@ -150,7 +152,7 @@ class CleanupServiceTest : WithDatabase {
             record(key = "C", age = 2.days)
         }
 
-        service().cleanup(topic)
+        cleanup(topic)
 
         // A: value superseded and old tombstone removed. B: tombstone younger than retention is kept.
         assertThat(remaining(topic)).isEqualTo(listOf(3L, 4L))
@@ -164,7 +166,7 @@ class CleanupServiceTest : WithDatabase {
             record(key = "C", age = 1.hours)
         }
 
-        val result = service().cleanup(topic)
+        val result = cleanup(topic)
 
         assertThat(result.maxCleanableSequence).isEqualTo(1L)
         assertThat(remaining(topic)).isEqualTo(listOf(1L, 2L, 3L))
@@ -180,7 +182,7 @@ class CleanupServiceTest : WithDatabase {
             record(key = "E", age = 1.hours)
         }
 
-        val result = service().cleanup(topic)
+        val result = cleanup(topic)
 
         assertThat(remaining(topic)).isEqualTo(listOf(3L, 4L, 5L))
         assertThat(result.deletedByRetention).isEqualTo(2)
@@ -198,7 +200,7 @@ class CleanupServiceTest : WithDatabase {
             record(key = "D", age = 1.hours)
         }
 
-        val result = service().cleanup(topic)
+        val result = cleanup(topic)
 
         assertThat(remaining(topic)).isEqualTo(listOf(3L, 4L, 5L))
         assertThat(result.deletedByCompact).isEqualTo(1)
@@ -207,16 +209,16 @@ class CleanupServiceTest : WithDatabase {
     }
 
     @Test
-    fun `small batch size still cleans everything`() {
+    fun `deletes more records than fit in one batch`() {
         val topic = topicMock(policies = setOf(CleanupPolicy.Compact())) {
-            repeat(25) { record(key = "A", age = 10.days) }
+            repeat(5) { record(key = "A", age = 10.days) }
             record(key = "A", age = 1.hours)
         }
 
-        val result = service(batchSize = 2).cleanup(topic)
+        val result = cleanup(topic)
 
-        assertThat(remaining(topic)).isEqualTo(listOf(26L))
-        assertThat(result.deletedByCompact).isEqualTo(25)
+        assertThat(remaining(topic)).isEqualTo(listOf(6L))
+        assertThat(result.deletedByCompact).isEqualTo(5)
     }
 
     @Test
@@ -227,7 +229,7 @@ class CleanupServiceTest : WithDatabase {
             record(key = "A", age = 8.days, producer = "producer-c")
         }
 
-        service().cleanup(topic)
+        cleanup(topic)
 
         assertThat(remaining(topic)).isEqualTo(listOf(3L))
     }
@@ -245,7 +247,7 @@ class CleanupServiceTest : WithDatabase {
             record(key = "A", age = 9.days)
         }
 
-        service().cleanup(topic)
+        cleanup(topic)
 
         assertThat(remaining(topic)).isEqualTo(listOf(2L))
         assertThat(remaining(other)).isEqualTo(listOf(1L, 2L))

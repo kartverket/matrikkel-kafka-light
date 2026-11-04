@@ -1,6 +1,5 @@
 package no.kartverket.matrikkel.broker.service.cleanup
 
-import kotlinx.coroutines.runBlocking
 import kotliquery.TransactionalSession
 import kotliquery.queryOf
 import no.kartverket.matrikkel.broker.domain.CleanupPolicy
@@ -31,7 +30,7 @@ object Cleanup {
     }
 
     interface Service {
-        fun cleanup(topic: Topic): Result
+        suspend fun cleanup(topic: Topic): Result
     }
 
     class ServiceImpl(
@@ -45,7 +44,7 @@ object Cleanup {
             require(batchSize > 0) { "batchSize must be positive" }
         }
 
-        override fun cleanup(topic: Topic): Result {
+        override suspend fun cleanup(topic: Topic): Result {
             val now = clock.now()
             val compact = topic.cleanupPolicies.filterIsInstance<CleanupPolicy.Compact>().singleOrNull()
             val delete = topic.cleanupPolicies.filterIsInstance<CleanupPolicy.Delete>().singleOrNull()
@@ -76,20 +75,18 @@ object Cleanup {
         }
 
         /** Runs batches, each in its own transaction holding only the cleanup lock, until a batch is not full. */
-        private fun deleteInBatches(topic: Topic, batch: (TransactionalSession) -> Int): Int {
+        private suspend fun deleteInBatches(topic: Topic, batch: (TransactionalSession) -> Int): Int {
             var total = 0
             while (true) {
-                val deleted = runBlocking {
-                    dataSource.withTransaction { tx ->
-                        DbMutex.withLock(CleanupLock, topic.name) { batch(tx) }
-                    }
+                val deleted = dataSource.withTransaction { tx ->
+                    DbMutex.withLock(CleanupLock, topic.name) { batch(tx) }
                 }
                 total += deleted
                 if (deleted < batchSize) return total
             }
         }
 
-        private fun findMaxCleanableSequence(topic: Topic, cutoff: Instant): Long = runBlocking {
+        private suspend fun findMaxCleanableSequence(topic: Topic, cutoff: Instant): Long =
             dataSource.withTransaction { tx ->
                 @Language("SQL")
                 val sql = """
@@ -104,7 +101,6 @@ object Cleanup {
                         .map { it.long("max_cleanable") }.asSingle
                 ) ?: 0L
             }
-        }
 
         private fun compactBatch(tx: TransactionalSession, topic: Topic, maxCleanable: Long, tombstoneCutoff: Instant): Int {
             @Language("SQL")

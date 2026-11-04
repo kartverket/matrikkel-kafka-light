@@ -39,7 +39,7 @@ class SequenceGapsAfterCleanupTest : WithDatabase {
     )
 
     /** Sequences 1..5 (keys A,B,A,B,A), all old. After cleanup only 4 and 5 survive. */
-    private fun seedAndCleanup(): Records.Service {
+    private suspend fun seedAndCleanup(): Records.Service {
         val old = Clock.System.now() - 10.days
         dataSource().insertRawRecords(
             topic.name,
