@@ -206,25 +206,10 @@ Topic(
 
 A topic can have at most one `Compact` and one `Delete` policy. `minCleanableAge` and `tombstoneRetention` must be positive, and `Delete.retention` must be at least `minCleanableAge`.
 
-Every `cleanup.interval` (default 10 minutes) the broker runs this for each topic with a policy:
+Every `cleanup.interval` (default 10 minutes) the broker cleans each topic with a policy.
 
-```mermaid
-flowchart TD
-    A[Start cleanup for topic] --> B["maxCleanable = highest sequence older than minCleanableAge,<br/>excluding the latest record on the topic"]
-    B --> C{maxCleanable > 0?}
-    C -- no --> Z[Done, nothing deleted]
-    C -- yes --> D{Delete policy?}
-    D -- yes --> E["Delete records up to maxCleanable<br/>older than retention"]
-    D -- no --> F
-    E --> F{Compact policy?}
-    F -- yes --> G["Delete records up to maxCleanable that<br/>have a newer record with the same key,<br/>or are tombstones older than tombstoneRetention"]
-    F -- no --> Z
-    G --> Z
-```
-
-Each delete step runs in batches of `cleanup.batchSize` rows (default 1000), one transaction per batch. Cleanup does not take the publish lock, so publish and poll keep working.
-
-Sequence numbers have gaps after cleanup. Cleanup ignores committed offsets, so a consumer that falls behind misses deleted records without an error.
+- `Delete` removes cleanable records older than `retention`.
+- `Compact` removes cleanable records that have a newer record with the same key, and tombstones (null payload) older than `tombstoneRetention`.
 
 Metrics: `records_deleted{topic,policy="compact"|"delete"}` (counter) and `cleanup_max_cleanable_sequence{topic}` (gauge).
 
