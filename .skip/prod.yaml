@@ -41,6 +41,7 @@ spec:
       rules:
         - application: matrikkel-ekstern-data-ingestor
         - application: matrikkel-serg-sync
+        - application: matrikkel-freg-sync
 
   databases:
     - name: matrikkel-kafka-light
