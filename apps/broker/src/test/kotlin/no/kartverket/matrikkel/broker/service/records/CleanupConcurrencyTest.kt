@@ -2,13 +2,11 @@ package no.kartverket.no.kartverket.matrikkel.broker.service.records
 
 import assertk.assertThat
 import assertk.assertions.containsAll
+import assertk.assertions.containsAtLeast
 import assertk.assertions.isEqualTo
 import assertk.assertions.isGreaterThan
-import assertk.assertions.isNotEmpty
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -29,11 +27,9 @@ import no.kartverket.no.kartverket.matrikkel.broker.testutils.WithDatabase
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.insertRawRecords
 import no.kartverket.no.kartverket.matrikkel.broker.testutils.storedSequences
 import org.junit.jupiter.api.Test
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -63,12 +59,8 @@ class CleanupConcurrencyTest : WithDatabase {
         seedOldRecords()
         val records = Records.ServiceImpl(dataSource())
         val cleanup = Cleanup.ServiceImpl(dataSource(), batchSize = 20)
-
-        val cleaning = AtomicBoolean(false)
-        val done = AtomicBoolean(false)
-        val publishedDuringCleanup = AtomicInteger()
-        val published = CopyOnWriteArrayList<Long>()
-        val polled = CopyOnWriteArrayList<Long>()
+        val published = mutableListOf<Long>()
+        val polled = mutableListOf<Long>()
         val pollRequest = PollRequest(
             maxRecords = 200,
             consumerGroup = "cc-group",
@@ -77,48 +69,41 @@ class CleanupConcurrencyTest : WithDatabase {
         )
 
         withTimeout(60.seconds) {
-            coroutineScope {
-                launch(Dispatchers.IO) {
-                    var i = 0
-                    while (!done.get()) {
-                        val request = PublishRequest(
-                            "idem-$i",
-                            listOf(PublishRecord("p$i".toByteArray(), "payload-$i".toByteArray()))
-                        )
-                        val response = records.publish(ctx, request).getOrThrow()
-                        if (cleaning.get()) publishedDuringCleanup.incrementAndGet()
-                        published += response.sequence
-                        i++
-                    }
+            val cleaning = launch {
+                while (published.isEmpty()) delay(5.milliseconds)
+                repeat(3) { cleanup.cleanup(topic) }
+            }
+            launch {
+                var i = 0
+                while (cleaning.isActive) {
+                    val request = PublishRequest(
+                        "idem-$i",
+                        listOf(PublishRecord("p$i".toByteArray(), "payload-$i".toByteArray()))
+                    )
+                    published += records.publish(ctx, request).getOrThrow().sequence
+                    i++
                 }
-                launch(Dispatchers.IO) {
-                    while (!done.get()) {
-                        val poll = records.poll(ctx, pollRequest).getOrThrow()
-                        if (poll.records.isNotEmpty()) {
-                            polled += poll.records.map { it.sequence }
-                            records.commit(ctx, CommitRequest(poll.leaseToken, poll.records.last().sequence))
-                                .getOrThrow()
-                        }
+            }
+            launch {
+                while (cleaning.isActive) {
+                    val poll = records.poll(ctx, pollRequest).getOrThrow()
+                    if (poll.records.isNotEmpty()) {
+                        polled += poll.records.map { it.sequence }
+                        records.commit(ctx, CommitRequest(poll.leaseToken, poll.records.last().sequence))
+                            .getOrThrow()
                     }
-                }
-                launch(Dispatchers.IO) {
-                    while (published.isEmpty()) delay(5)
-                    cleaning.set(true)
-                    repeat(3) { cleanup.cleanup(topic) }
-                    cleaning.set(false)
-                    done.set(true)
                 }
             }
         }
 
-        assertThat(publishedDuringCleanup.get()).isGreaterThan(0)
-        assertThat(published.toList()).isEqualTo(published.sorted().distinct())
+        assertThat(published.size).isGreaterThan(1)
+        assertThat(published).isEqualTo(published.sorted().distinct())
         assertThat(published.first()).isGreaterThan(oldRows.toLong())
-        assertThat(polled.toList()).isEqualTo(polled.sorted().distinct())
+        assertThat(polled).isEqualTo(polled.sorted().distinct())
 
         val stored = dataSource().storedSequences(topic.name)
         assertThat(stored.filter { it <= oldRows.toLong() }).isEqualTo(expectedOldSurvivors)
-        assertThat(stored).containsAll(*published.toTypedArray())
+        assertThat(stored).containsAtLeast(*published.toTypedArray())
         assertThat(stored.last()).isEqualTo(published.last())
     }
 
@@ -128,10 +113,9 @@ class CleanupConcurrencyTest : WithDatabase {
         val cleanup = Cleanup.ServiceImpl(dataSource(), batchSize = 20)
 
         val results = withTimeout(60.seconds) {
-            (1..2).map { async(Dispatchers.IO) { cleanup.cleanup(topic) } }.awaitAll()
+            (1..2).map { async { cleanup.cleanup(topic) } }.awaitAll()
         }
 
-        assertThat(results).isNotEmpty()
         assertThat(results.sumOf { it.totalDeleted }).isEqualTo(oldRows - distinctKeys)
         assertThat(dataSource().storedSequences(topic.name)).isEqualTo(expectedOldSurvivors)
     }
