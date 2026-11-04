@@ -24,7 +24,7 @@ object Cleanup {
         val topic: String,
         val deletedByCompact: Int,
         val deletedByRetention: Int,
-        val maxCleanableSequence: Long,
+        val maxCompactableSequence: Long,
     ) {
         val totalDeleted: Int get() = deletedByCompact + deletedByRetention
     }
@@ -49,26 +49,27 @@ object Cleanup {
             val compact = topic.cleanupPolicies.filterIsInstance<CleanupPolicy.Compact>().singleOrNull()
             val delete = topic.cleanupPolicies.filterIsInstance<CleanupPolicy.Delete>().singleOrNull()
 
-            val maxCleanable = findMaxCleanableSequence(topic, now - topic.minCleanableAge)
             var deletedByCompact = 0
             var deletedByRetention = 0
+            var maxCompactable = 0L
 
-            if (maxCleanable > 0) {
-                if (delete != null) {
-                    val cutoff = now - delete.retention
-                    deletedByRetention = deleteInBatches(topic) { retentionBatch(it, topic, maxCleanable, cutoff) }
-                }
-                if (compact != null) {
+            if (delete != null) {
+                val cutoff = now - delete.retention
+                deletedByRetention = deleteInBatches(topic) { retentionBatch(it, topic, cutoff) }
+            }
+            if (compact != null) {
+                maxCompactable = findMaxCompactableSequence(topic, now - compact.minCompactionLag)
+                if (maxCompactable > 0) {
                     val tombstoneCutoff = now - compact.tombstoneRetention
-                    deletedByCompact = deleteInBatches(topic) { compactBatch(it, topic, maxCleanable, tombstoneCutoff) }
+                    deletedByCompact = deleteInBatches(topic) { compactBatch(it, topic, maxCompactable, tombstoneCutoff) }
                 }
             }
 
-            val result = Result(topic.name, deletedByCompact, deletedByRetention, maxCleanable)
+            val result = Result(topic.name, deletedByCompact, deletedByRetention, maxCompactable)
             if (result.totalDeleted > 0) {
                 log.info(
-                    "Cleanup topic={} deletedByCompact={} deletedByRetention={} maxCleanableSequence={}",
-                    topic.name, deletedByCompact, deletedByRetention, maxCleanable
+                    "Cleanup topic={} deletedByCompact={} deletedByRetention={} maxCompactableSequence={}",
+                    topic.name, deletedByCompact, deletedByRetention, maxCompactable
                 )
             }
             return result
@@ -86,11 +87,11 @@ object Cleanup {
             }
         }
 
-        private suspend fun findMaxCleanableSequence(topic: Topic, cutoff: Instant): Long =
+        private suspend fun findMaxCompactableSequence(topic: Topic, cutoff: Instant): Long =
             dataSource.withTransaction { tx ->
                 @Language("SQL")
                 val sql = """
-                    SELECT COALESCE(MAX(sequence), 0) AS max_cleanable
+                    SELECT COALESCE(MAX(sequence), 0) AS max_compactable
                     FROM records
                     WHERE topic = :topic
                       AND published_at < :cutoff
@@ -98,11 +99,11 @@ object Cleanup {
                 """.trimIndent()
                 tx.run(
                     queryOf(sql, mapOf("topic" to topic.name, "cutoff" to cutoff.toOffsetDateTime()))
-                        .map { it.long("max_cleanable") }.asSingle
+                        .map { it.long("max_compactable") }.asSingle
                 ) ?: 0L
             }
 
-        private fun compactBatch(tx: TransactionalSession, topic: Topic, maxCleanable: Long, tombstoneCutoff: Instant): Int {
+        private fun compactBatch(tx: TransactionalSession, topic: Topic, maxCompactable: Long, tombstoneCutoff: Instant): Int {
             @Language("SQL")
             val sql = """
                 DELETE FROM records
@@ -110,7 +111,7 @@ object Cleanup {
                     SELECT r.topic, r.sequence
                     FROM records r
                     WHERE r.topic = :topic
-                      AND r.sequence <= :maxCleanable
+                      AND r.sequence <= :maxCompactable
                       AND (
                         EXISTS (
                             SELECT 1 FROM records n
@@ -127,7 +128,7 @@ object Cleanup {
                     sql,
                     mapOf(
                         "topic" to topic.name,
-                        "maxCleanable" to maxCleanable,
+                        "maxCompactable" to maxCompactable,
                         "tombstoneCutoff" to tombstoneCutoff.toOffsetDateTime(),
                         "batchSize" to batchSize,
                     )
@@ -135,14 +136,16 @@ object Cleanup {
             )
         }
 
-        private fun retentionBatch(tx: TransactionalSession, topic: Topic, maxCleanable: Long, cutoff: Instant): Int {
+        private fun retentionBatch(tx: TransactionalSession, topic: Topic, cutoff: Instant): Int {
             @Language("SQL")
             val sql = """
                 DELETE FROM records
                 WHERE (topic, sequence) IN (
                     SELECT topic, sequence
                     FROM records
-                    WHERE topic = :topic AND sequence <= :maxCleanable AND published_at < :cutoff
+                    WHERE topic = :topic
+                      AND published_at < :cutoff
+                      AND sequence < (SELECT MAX(sequence) FROM records WHERE topic = :topic)
                     ORDER BY sequence
                     LIMIT :batchSize
                 )
@@ -152,7 +155,6 @@ object Cleanup {
                     sql,
                     mapOf(
                         "topic" to topic.name,
-                        "maxCleanable" to maxCleanable,
                         "cutoff" to cutoff.toOffsetDateTime(),
                         "batchSize" to batchSize,
                     )

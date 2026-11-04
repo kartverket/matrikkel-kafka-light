@@ -197,21 +197,20 @@ Topic(
     name = "MY_TOPIC",
     acl = ...,
     cleanupPolicies = setOf(
-        CleanupPolicy.Compact(tombstoneRetention = 24.hours),
+        CleanupPolicy.Compact(minCompactionLag = 24.hours, tombstoneRetention = 24.hours), // defaults
         CleanupPolicy.Delete(retention = 30.days),
     ),
-    minCleanableAge = 24.hours, // default
 )
 ```
 
-A topic can have at most one `Compact` and one `Delete` policy. `minCleanableAge` and `tombstoneRetention` must be positive, and `Delete.retention` must be at least `minCleanableAge`.
+A topic can have at most one `Compact` and one `Delete` policy. All durations must be positive.
 
-Every `cleanup.interval` (default 10 minutes) the broker cleans each topic with a policy.
+Every `cleanup.interval` (default 10 minutes) the broker cleans each topic with a policy. The latest record on a topic is never deleted.
 
-- `Delete` removes cleanable records older than `retention`.
-- `Compact` removes cleanable records that have a newer record with the same key, and tombstones (null payload) older than `tombstoneRetention`.
+- `Delete` removes records older than `retention`.
+- `Compact` removes records that have a newer record with the same key, and tombstones (null payload) older than `tombstoneRetention`. Records younger than `minCompactionLag` are not compacted.
 
-Metrics: `records_deleted{topic,policy="compact"|"delete"}` (counter) and `cleanup_max_cleanable_sequence{topic}` (gauge).
+Metrics: `records_deleted{topic,policy="compact"|"delete"}` (counter) and `cleanup_max_compactable_sequence{topic}` (gauge).
 
 ## Running locally
 Starting the broker locally is done by running [RunLocally](apps/broker/src/test/kotlin/no/kartverket/matrikkel/broker/RunLocally.kt).

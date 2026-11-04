@@ -23,12 +23,10 @@ class CleanupServiceTest : WithDatabase {
     private fun topic(
         policies: Set<CleanupPolicy>,
         name: String = "cleanup-topic",
-        minCleanableAge: Duration = 1.days,
     ) = Topic(
         name = name,
         acl = TopicAccessControlList(setOf("*"), setOf("*")),
         cleanupPolicies = policies,
-        minCleanableAge = minCleanableAge,
     )
 
     private val service: Cleanup.Service = Cleanup.ServiceImpl(dataSource(), batchSize = 2, clock = clock)
@@ -62,11 +60,10 @@ class CleanupServiceTest : WithDatabase {
 
     private fun topicMock(
         name: String = "cleanup-topic",
-        minCleanableAge: Duration = 1.days,
         policies: Set<CleanupPolicy> = setOf(),
         fn: TopicBuilder.() -> Unit,
     ): Topic {
-        val topic = topic(name = name, minCleanableAge = minCleanableAge, policies = policies)
+        val topic = topic(name = name, policies = policies)
         val builder = TopicBuilder().apply(fn)
         seed(topic, *builder.records.toTypedArray())
         return topic
@@ -102,11 +99,11 @@ class CleanupServiceTest : WithDatabase {
         assertThat(result.topic).isEqualTo(topic.name)
         assertThat(result.deletedByCompact).isEqualTo(3)
         assertThat(result.deletedByRetention).isEqualTo(0)
-        assertThat(result.maxCleanableSequence).isEqualTo(4L)
+        assertThat(result.maxCompactableSequence).isEqualTo(4L)
     }
 
     @Test
-    fun `records younger than minCleanableAge are kept even when superseded`() {
+    fun `records younger than minCompactionLag are kept even when superseded`() {
         val topic = topicMock(policies = setOf(CleanupPolicy.Compact())) {
             record(key = "A", age = 10.days)
             record(key = "A", age = 2.hours)
@@ -116,7 +113,7 @@ class CleanupServiceTest : WithDatabase {
         val result = cleanup(topic)
 
         assertThat(remaining(topic)).isEqualTo(listOf(2L, 3L))
-        assertThat(result.maxCleanableSequence).isEqualTo(1L)
+        assertThat(result.maxCompactableSequence).isEqualTo(1L)
     }
 
     @Test
@@ -129,7 +126,7 @@ class CleanupServiceTest : WithDatabase {
         val result = cleanup(topic)
 
         assertThat(remaining(topic)).isEqualTo(listOf(2L))
-        assertThat(result.maxCleanableSequence).isEqualTo(1L)
+        assertThat(result.maxCompactableSequence).isEqualTo(1L)
     }
 
     @Test
@@ -168,7 +165,7 @@ class CleanupServiceTest : WithDatabase {
 
         val result = cleanup(topic)
 
-        assertThat(result.maxCleanableSequence).isEqualTo(1L)
+        assertThat(result.maxCompactableSequence).isEqualTo(1L)
         assertThat(remaining(topic)).isEqualTo(listOf(1L, 2L, 3L))
     }
 
@@ -187,7 +184,7 @@ class CleanupServiceTest : WithDatabase {
         assertThat(remaining(topic)).isEqualTo(listOf(3L, 4L, 5L))
         assertThat(result.deletedByRetention).isEqualTo(2)
         assertThat(result.deletedByCompact).isEqualTo(0)
-        assertThat(result.maxCleanableSequence).isEqualTo(3L)
+        assertThat(result.maxCompactableSequence).isEqualTo(0L)
     }
 
     @Test

@@ -22,18 +22,18 @@ class CleanupMetricsBinderTest {
         registry.get("records_deleted").tags("topic", topic, "policy", policy).counter().count()
 
     @Test
-    fun `records counters per policy and max cleanable sequence gauge`() {
-        binder.record(Cleanup.Result("compacted", deletedByCompact = 1, deletedByRetention = 2, maxCleanableSequence = 4))
-        binder.record(Cleanup.Result("compacted", deletedByCompact = 0, deletedByRetention = 0, maxCleanableSequence = 7))
+    fun `records counters per policy and max compactable sequence gauge`() {
+        binder.record(Cleanup.Result("compacted", deletedByCompact = 1, deletedByRetention = 2, maxCompactableSequence = 4))
+        binder.record(Cleanup.Result("compacted", deletedByCompact = 0, deletedByRetention = 0, maxCompactableSequence = 7))
 
         assertThat(count("compacted", "compact")).isEqualTo(1.0)
         assertThat(count("compacted", "delete")).isEqualTo(2.0)
-        assertThat(registry.get("cleanup_max_cleanable_sequence").tag("topic", "compacted").gauge().value())
+        assertThat(registry.get("cleanup_max_compactable_sequence").tag("topic", "compacted").gauge().value())
             .isEqualTo(7.0)
     }
 
     @Test
     fun `registers meters only for topics with a cleanup policy`() {
-        assertThat(registry.find("cleanup_max_cleanable_sequence").tag("topic", "plain").gauge()).isNull()
+        assertThat(registry.find("cleanup_max_compactable_sequence").tag("topic", "plain").gauge()).isNull()
     }
 }

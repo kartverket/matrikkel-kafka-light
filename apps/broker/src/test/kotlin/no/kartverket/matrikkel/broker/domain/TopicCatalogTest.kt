@@ -35,39 +35,30 @@ class TopicCatalogTest {
         assertTrue(topic.acl.canConsume(identity))
     }
 
-    private fun rejects(minCleanableAge: Duration = 24.hours, vararg policies: CleanupPolicy) {
+    private fun rejects(vararg policies: CleanupPolicy) {
         assertFailsWith<IllegalArgumentException> {
-            testtopic.copy(minCleanableAge = minCleanableAge, cleanupPolicies = policies.toSet())
+            testtopic.copy(cleanupPolicies = policies.toSet())
         }
     }
 
     @Test
-    fun `topic rejects non-positive minCleanableAge`() {
-        rejects(minCleanableAge = Duration.ZERO)
-        rejects(minCleanableAge = (-1).hours)
+    fun `policies reject non-positive durations`() {
+        assertFailsWith<IllegalArgumentException> { CleanupPolicy.Delete(Duration.ZERO) }
+        assertFailsWith<IllegalArgumentException> { CleanupPolicy.Compact(minCompactionLag = Duration.ZERO) }
+        assertFailsWith<IllegalArgumentException> { CleanupPolicy.Compact(tombstoneRetention = (-1).hours) }
     }
 
     @Test
     fun `topic rejects more than one delete or compact policy`() {
-        rejects(policies = arrayOf(CleanupPolicy.Delete(2.days), CleanupPolicy.Delete(3.days)))
-        rejects(policies = arrayOf(CleanupPolicy.Compact(1.days), CleanupPolicy.Compact(2.days)))
+        rejects(CleanupPolicy.Delete(2.days), CleanupPolicy.Delete(3.days))
+        rejects(CleanupPolicy.Compact(minCompactionLag = 1.days), CleanupPolicy.Compact(minCompactionLag = 2.days))
     }
 
     @Test
-    fun `topic rejects delete retention shorter than minCleanableAge`() {
-        rejects(minCleanableAge = 2.days, policies = arrayOf(CleanupPolicy.Delete(1.days)))
-    }
-
-    @Test
-    fun `topic rejects non-positive tombstoneRetention`() {
-        rejects(policies = arrayOf(CleanupPolicy.Compact(Duration.ZERO)))
-    }
-
-    @Test
-    fun `topic accepts delete retention equal to minCleanableAge and both policies together`() {
+    fun `topic accepts delete and compact together`() {
         val policies = setOf(CleanupPolicy.Delete(2.days), CleanupPolicy.Compact())
 
-        val topic = testtopic.copy(minCleanableAge = 2.days, cleanupPolicies = policies)
+        val topic = testtopic.copy(cleanupPolicies = policies)
 
         assertEquals(policies, topic.cleanupPolicies)
     }
