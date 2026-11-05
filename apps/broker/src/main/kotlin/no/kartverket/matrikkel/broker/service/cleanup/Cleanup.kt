@@ -115,7 +115,7 @@ object Cleanup {
                     sql,
                     mapOf(
                         "topic" to topic.name,
-                        "cutoff" to cutoff,
+                        "cutoff" to cutoff.toOffsetDateTime(),
                         "tombstoneCutoff" to tombstoneCutoff.toOffsetDateTime(),
                         "batchSize" to batchSize,
                     )
