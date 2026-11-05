@@ -29,31 +29,23 @@ class CleanupMetricsBinderTest {
     private fun hasCounter(topic: String, policy: String) =
         registry.find("records_deleted").tags("topic", topic, "policy", policy).counter() != null
 
-    private fun hasGauge(topic: String) =
-        registry.find("cleanup_max_compactable_sequence").tag("topic", topic).gauge() != null
-
     @Test
-    fun `records counters per policy and max compactable sequence gauge`() {
-        binder.record(Cleanup.Result("both", deletedByCompact = 1, deletedByRetention = 2, maxCompactableSequence = 4))
-        binder.record(Cleanup.Result("both", deletedByCompact = 0, deletedByRetention = 0, maxCompactableSequence = 7))
+    fun `records counters per policy`() {
+        binder.record(Cleanup.Result("both", deletedByCompact = 1, deletedByRetention = 2))
+        binder.record(Cleanup.Result("both", deletedByCompact = 0, deletedByRetention = 0))
 
         assertThat(count("both", "compact")).isEqualTo(1.0)
         assertThat(count("both", "delete")).isEqualTo(2.0)
-        assertThat(registry.get("cleanup_max_compactable_sequence").tag("topic", "both").gauge().value())
-            .isEqualTo(7.0)
     }
 
     @Test
     fun `registers only meters matching the topic policies`() {
-        assertThat(hasGauge("both")).isTrue()
         assertThat(hasCounter("both", "compact")).isTrue()
         assertThat(hasCounter("both", "delete")).isTrue()
 
-        assertThat(hasGauge("delete-only")).isFalse()
         assertThat(hasCounter("delete-only", "compact")).isFalse()
         assertThat(hasCounter("delete-only", "delete")).isTrue()
 
-        assertThat(hasGauge("plain")).isFalse()
         assertThat(hasCounter("plain", "delete")).isFalse()
     }
 }
