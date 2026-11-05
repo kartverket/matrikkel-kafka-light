@@ -207,6 +207,8 @@ Every `cleanup.interval` (default 10 minutes) the broker cleans each topic with 
 - `Delete` removes records older than `retention`.
 - `Compact` removes records that have a newer record with the same key, and tombstones (null payload) older than `tombstoneRetention`. Records younger than `minCompactionLag` are not compacted.
 
+Metrics: `records_deleted{topic,policy="compact"|"delete"}` (counter) and `cleanup_max_compactable_sequence{topic}` (gauge).
+
 ## Running locally
 Starting the broker locally is done by running [RunLocally](apps/broker/src/test/kotlin/no/kartverket/matrikkel/broker/RunLocally.kt).
 It supports two modes (decided by which `.env` file it loads);

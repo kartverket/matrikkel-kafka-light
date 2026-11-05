@@ -24,6 +24,7 @@ import no.kartverket.matrikkel.broker.config.DataSourceConfiguration
 import no.kartverket.matrikkel.broker.service.cleanup.Cleanup
 import no.kartverket.matrikkel.broker.service.cleanup.CleanupScheduler
 import no.kartverket.matrikkel.broker.service.records.Records
+import no.kartverket.matrikkel.broker.utils.CleanupMetricsBinder
 import no.kartverket.matrikkel.broker.utils.TopicMetricsBinder
 import org.slf4j.LoggerFactory
 import kotlin.uuid.Uuid
@@ -39,6 +40,8 @@ fun runApplication(disableSecurity: Boolean = false) {
         config.database.userCredential,
     )
 
+    val cleanupMetrics = CleanupMetricsBinder(config.topicsCatalog.topics)
+
     KtorServer.create(factory = Netty, port = 8081) {
         standardPlugins(config.version)
 
@@ -46,6 +49,7 @@ fun runApplication(disableSecurity: Boolean = false) {
             topics = config.topicsCatalog.topics,
             service = Cleanup.ServiceImpl(dataSource, batchSize = config.cleanup.batchSize),
             interval = config.cleanup.interval,
+            onCleanup = cleanupMetrics::record,
         ).start(this)
 
         install(Authentication) {
@@ -61,6 +65,7 @@ fun runApplication(disableSecurity: Boolean = false) {
                 topicCatalog = config.topicsCatalog,
                 dataSource = dataSource,
             )
+            meterBinders += cleanupMetrics
         }
 
         routing {
