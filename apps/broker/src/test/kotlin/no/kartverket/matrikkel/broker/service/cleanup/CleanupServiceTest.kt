@@ -85,7 +85,6 @@ class CleanupServiceTest : WithDatabase {
         assertThat(remaining(topic)).isEqualTo(listOf(4L, 5L))
         assertThat(result.deletedByCompact).isEqualTo(3)
         assertThat(result.deletedByRetention).isEqualTo(0)
-        assertThat(result.maxCompactableSequence).isEqualTo(4L)
     }
 
     @Test
@@ -99,7 +98,6 @@ class CleanupServiceTest : WithDatabase {
         val result = cleanup(topic)
 
         assertThat(remaining(topic)).isEqualTo(listOf(2L, 3L))
-        assertThat(result.maxCompactableSequence).isEqualTo(1L)
     }
 
     @Test
@@ -112,7 +110,6 @@ class CleanupServiceTest : WithDatabase {
         val result = cleanup(topic)
 
         assertThat(remaining(topic)).isEqualTo(listOf(2L))
-        assertThat(result.maxCompactableSequence).isEqualTo(1L)
     }
 
     @Test
@@ -143,16 +140,14 @@ class CleanupServiceTest : WithDatabase {
     }
 
     @Test
-    fun `tombstone above maxCompactableSequence is kept even when older than tombstoneRetention`() {
+    fun `tombstone before minCompactionLag is kept even when older than tombstoneRetention`() {
         val topic = topicMock(policies = setOf(CleanupPolicy.Compact(tombstoneRetention = 1.hours))) {
             record(key = "A", age = 10.days)
             record(key = "B", age = 2.hours, payload = null)
             record(key = "C", age = 1.hours)
         }
 
-        val result = cleanup(topic)
-
-        assertThat(result.maxCompactableSequence).isEqualTo(1L)
+        cleanup(topic)
         assertThat(remaining(topic)).isEqualTo(listOf(1L, 2L, 3L))
     }
 
@@ -171,7 +166,6 @@ class CleanupServiceTest : WithDatabase {
         assertThat(remaining(topic)).isEqualTo(listOf(3L, 4L, 5L))
         assertThat(result.deletedByRetention).isEqualTo(2)
         assertThat(result.deletedByCompact).isEqualTo(0)
-        assertThat(result.maxCompactableSequence).isEqualTo(0L)
     }
 
     @Test
