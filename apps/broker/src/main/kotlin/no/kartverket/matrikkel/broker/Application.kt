@@ -21,6 +21,8 @@ import no.kartverket.heimdall.common.ktor.utils.KtorServer
 import no.kartverket.matrikkel.broker.api.topicRoutes
 import no.kartverket.matrikkel.broker.config.Configuration
 import no.kartverket.matrikkel.broker.config.DataSourceConfiguration
+import no.kartverket.matrikkel.broker.service.cleanup.Cleanup
+import no.kartverket.matrikkel.broker.service.cleanup.CleanupScheduler
 import no.kartverket.matrikkel.broker.service.records.Records
 import no.kartverket.matrikkel.broker.utils.TopicMetricsBinder
 import org.slf4j.LoggerFactory
@@ -39,6 +41,12 @@ fun runApplication(disableSecurity: Boolean = false) {
 
     KtorServer.create(factory = Netty, port = 8081) {
         standardPlugins(config.version)
+
+        CleanupScheduler(
+            topics = config.topicsCatalog.topics,
+            service = Cleanup.ServiceImpl(dataSource, batchSize = config.cleanup.batchSize),
+            interval = config.cleanup.interval,
+        ).start(this)
 
         install(Authentication) {
             if (disableSecurity) {
