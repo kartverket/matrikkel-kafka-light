@@ -2,7 +2,6 @@ package no.kartverket.matrikkel.broker.service.cleanup
 
 import kotliquery.TransactionalSession
 import kotliquery.queryOf
-import no.kartverket.matrikkel.broker.domain.CleanupPolicy
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.repository.DbMutex
 import no.kartverket.matrikkel.broker.repository.withTransaction
@@ -45,8 +44,8 @@ object Cleanup {
 
         override suspend fun cleanup(topic: Topic): Result {
             val now = clock.now()
-            val compact = topic.cleanupPolicies.filterIsInstance<CleanupPolicy.Compact>().singleOrNull()
-            val delete = topic.cleanupPolicies.filterIsInstance<CleanupPolicy.Delete>().singleOrNull()
+            val compact = topic.compactionPolicy
+            val delete = topic.deletionPolicy
 
             var deletedByCompact = 0
             var deletedByRetention = 0

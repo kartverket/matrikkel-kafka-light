@@ -12,10 +12,13 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.milliseconds
 
 class CleanupSchedulerTest {
-    private fun topic(name: String, vararg policies: CleanupPolicy) = Topic(
+    private fun topic(name: String,
+                      compactionPolicy: CleanupPolicy.Compact?=null,
+                      deletionPolicy : CleanupPolicy.Delete?=null) = Topic(
         name = name,
         acl = TopicAccessControlList(setOf("*"), setOf("*")),
-        cleanupPolicies = policies.toSet(),
+        compactionPolicy = compactionPolicy,
+        deletionPolicy = deletionPolicy
     )
 
     private class FakeCleanupService(private val failOn: String? = null) : Cleanup.Service {
@@ -31,7 +34,7 @@ class CleanupSchedulerTest {
     @Test
     fun `only topics with cleanup policies are cleaned repeatedly`() = runTest {
         val service = FakeCleanupService()
-        val topics = listOf(topic("with-policy", CleanupPolicy.Compact()), topic("without-policy"))
+        val topics = listOf(topic("with-policy", compactionPolicy = CleanupPolicy.Compact()), topic("without-policy"))
 
         CleanupScheduler(topics, service, interval = 20.milliseconds).start(backgroundScope)
         delay(50.milliseconds)
@@ -43,8 +46,8 @@ class CleanupSchedulerTest {
     fun `exception in one topic does not stop the loop`() = runTest {
         val service = FakeCleanupService(failOn = "failing")
         val topics = listOf(
-            topic("failing", CleanupPolicy.Compact()),
-            topic("healthy", CleanupPolicy.Delete(retention = 2.days)),
+            topic("failing", compactionPolicy = CleanupPolicy.Compact()),
+            topic("healthy", deletionPolicy = CleanupPolicy.Delete(retention = 2.days)),
         )
 
         CleanupScheduler(topics, service, interval = 20.milliseconds).start(backgroundScope)

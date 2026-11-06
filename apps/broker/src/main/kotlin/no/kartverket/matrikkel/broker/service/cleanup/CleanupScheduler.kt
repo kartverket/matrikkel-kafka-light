@@ -17,7 +17,7 @@ class CleanupScheduler(
     private val interval: Duration,
 ) {
     private val log = LoggerFactory.getLogger(CleanupScheduler::class.java)
-    private val topics = topics.filter { it.cleanupPolicies.isNotEmpty() }
+    private val topics = topics.filter { it.deletionPolicy != null || it.compactionPolicy != null }
 
     fun start(scope: CoroutineScope): Job = scope.launch {
         while (scope.isActive) {

@@ -8,12 +8,11 @@ data class Topic(
     val acl: TopicAccessControlList,
     val leaseTime: Duration = 30.seconds,
     val tombstonesAllowed: Boolean = true,
-    val cleanupPolicies: Set<CleanupPolicy> = emptySet(),
+    val compactionPolicy: CleanupPolicy.Compact?=null,
+    val deletionPolicy: CleanupPolicy.Delete?=null,
 ) {
     init {
         require(TopicName.isValid(name)) { "Invalid topic name '$name'" }
-        require(cleanupPolicies.count { it is CleanupPolicy.Delete } <= 1) { "At most one Delete policy is allowed" }
-        require(cleanupPolicies.count { it is CleanupPolicy.Compact } <= 1) { "At most one Compact policy is allowed" }
     }
 }
 

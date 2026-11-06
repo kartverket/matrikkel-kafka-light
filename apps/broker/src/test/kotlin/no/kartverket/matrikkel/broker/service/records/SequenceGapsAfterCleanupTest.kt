@@ -28,7 +28,7 @@ class SequenceGapsAfterCleanupTest : WithDatabase {
     private val topic = Topic(
         name = "gap-topic",
         acl = TopicAccessControlList(setOf("*"), setOf("*")),
-        cleanupPolicies = setOf(CleanupPolicy.Compact()),
+        compactionPolicy = CleanupPolicy.Compact(),
     )
     private val ctx = Records.Service.Ctx(topic, ServiceIdentity("fake-user"), Uuid.random())
     private val pollRequest = PollRequest(

@@ -44,13 +44,15 @@ class CleanupServiceTest : WithDatabase {
 
     private fun topicMock(
         name: String = "cleanup-topic",
-        policies: Set<CleanupPolicy> = emptySet(),
+        compactionPolicy: CleanupPolicy.Compact? = null,
+        deletionPolicy: CleanupPolicy.Delete? = null,
         build: RecordsBuilder.() -> Unit,
     ): Topic {
         val topic = Topic(
             name = name,
             acl = TopicAccessControlList(setOf("*"), setOf("*")),
-            cleanupPolicies = policies,
+            compactionPolicy = compactionPolicy,
+            deletionPolicy = deletionPolicy,
         )
         dataSource().insertRawRecords(topic.name, RecordsBuilder().apply(build).records)
         return topic
@@ -72,7 +74,7 @@ class CleanupServiceTest : WithDatabase {
 
     @Test
     fun `compact removes older versions but keeps latest per key`() {
-        val topic = topicMock(policies = setOf(CleanupPolicy.Compact())) {
+        val topic = topicMock(compactionPolicy = CleanupPolicy.Compact()) {
             record(key = "A", age = 10.days)
             record(key = "B", age = 10.days)
             record(key = "A", age = 9.days)
@@ -89,7 +91,7 @@ class CleanupServiceTest : WithDatabase {
 
     @Test
     fun `records younger than minCompactionLag are kept even when superseded`() {
-        val topic = topicMock(policies = setOf(CleanupPolicy.Compact())) {
+        val topic = topicMock(compactionPolicy = CleanupPolicy.Compact()) {
             record(key = "A", age = 10.days)
             record(key = "A", age = 2.hours)
             record(key = "A", age = 1.hours)
@@ -102,7 +104,7 @@ class CleanupServiceTest : WithDatabase {
 
     @Test
     fun `head is never deleted even when it is an old tombstone`() {
-        val topic = topicMock(policies = setOf(CleanupPolicy.Compact(tombstoneRetention = 1.hours))) {
+        val topic = topicMock(compactionPolicy = CleanupPolicy.Compact(tombstoneRetention = 1.hours)) {
             record(key = "A", age = 10.days)
             record(key = "A", age = 10.days, payload = null)
         }
@@ -114,7 +116,7 @@ class CleanupServiceTest : WithDatabase {
 
     @Test
     fun `head is never deleted by delete policy even when older than retention`() {
-        val topic = topicMock(policies = setOf(CleanupPolicy.Delete(retention = 2.days))) {
+        val topic = topicMock(deletionPolicy = CleanupPolicy.Delete(retention = 2.days)) {
             record(key = "A", age = 10.days)
             record(key = "B", age = 10.days)
         }
@@ -126,7 +128,7 @@ class CleanupServiceTest : WithDatabase {
 
     @Test
     fun `tombstone is removed only after tombstoneRetention`() {
-        val topic = topicMock(policies = setOf(CleanupPolicy.Compact(tombstoneRetention = 5.days))) {
+        val topic = topicMock(compactionPolicy = CleanupPolicy.Compact(tombstoneRetention = 5.days)) {
             record(key = "A", age = 10.days)
             record(key = "A", age = 10.days, payload = null)
             record(key = "B", age = 3.days, payload = null)
@@ -141,7 +143,7 @@ class CleanupServiceTest : WithDatabase {
 
     @Test
     fun `tombstone before minCompactionLag is kept even when older than tombstoneRetention`() {
-        val topic = topicMock(policies = setOf(CleanupPolicy.Compact(tombstoneRetention = 1.hours))) {
+        val topic = topicMock(compactionPolicy = CleanupPolicy.Compact(tombstoneRetention = 1.hours)) {
             record(key = "A", age = 10.days)
             record(key = "B", age = 2.hours, payload = null)
             record(key = "C", age = 1.hours)
@@ -153,7 +155,7 @@ class CleanupServiceTest : WithDatabase {
 
     @Test
     fun `delete policy removes records older than retention`() {
-        val topic = topicMock(policies = setOf(CleanupPolicy.Delete(retention = 3.days))) {
+        val topic = topicMock(deletionPolicy = CleanupPolicy.Delete(retention = 3.days)) {
             record(key = "A", age = 10.days)
             record(key = "B", age = 5.days)
             record(key = "C", age = 2.days)
@@ -170,7 +172,9 @@ class CleanupServiceTest : WithDatabase {
 
     @Test
     fun `compact and delete combined count deletions per policy`() {
-        val topic = topicMock(policies = setOf(CleanupPolicy.Delete(retention = 7.days), CleanupPolicy.Compact())) {
+        val topic = topicMock(
+            deletionPolicy = CleanupPolicy.Delete(retention = 7.days),
+            compactionPolicy =  CleanupPolicy.Compact()) {
             record(key = "A", age = 6.days)
             record(key = "B", age = 8.days)
             record(key = "A", age = 5.days)
@@ -188,7 +192,7 @@ class CleanupServiceTest : WithDatabase {
 
     @Test
     fun `deletes more records than fit in one batch`() {
-        val topic = topicMock(policies = setOf(CleanupPolicy.Compact())) {
+        val topic = topicMock(compactionPolicy = CleanupPolicy.Compact()) {
             repeat(5) { record(key = "A", age = 10.days) }
             record(key = "A", age = 1.hours)
         }
@@ -201,7 +205,7 @@ class CleanupServiceTest : WithDatabase {
 
     @Test
     fun `same key from different producers is compacted`() {
-        val topic = topicMock(policies = setOf(CleanupPolicy.Compact())) {
+        val topic = topicMock(compactionPolicy = CleanupPolicy.Compact()) {
             record(key = "A", age = 10.days, producer = "producer-a")
             record(key = "A", age = 9.days, producer = "producer-b")
             record(key = "A", age = 8.days, producer = "producer-c")
@@ -214,11 +218,13 @@ class CleanupServiceTest : WithDatabase {
 
     @Test
     fun `other topics are untouched`() {
-        val topic = topicMock(policies = setOf(CleanupPolicy.Delete(retention = 2.days), CleanupPolicy.Compact())) {
+        val topic = topicMock(
+            deletionPolicy = CleanupPolicy.Delete(retention = 2.days),
+            compactionPolicy =  CleanupPolicy.Compact()) {
             record(key = "A", age = 10.days)
             record(key = "A", age = 9.days)
         }
-        val other = topicMock(policies = setOf(CleanupPolicy.Compact()), name = "other-topic") {
+        val other = topicMock(compactionPolicy = CleanupPolicy.Compact(), name = "other-topic") {
             record(key = "A", age = 10.days)
             record(key = "A", age = 9.days)
         }

@@ -190,20 +190,17 @@ sequenceDiagram
 ```
 
 ## Cleanup / compaction
-Topics can opt in to cleanup with `Topic.cleanupPolicies`. The default is empty, so nothing is deleted.
+Topics can opt in to cleanup with `Topic.deletionPolicy` and `Topic.compactionPolicy`. The default is empty, so nothing is deleted.
 
 ```kotlin
 Topic(
     name = "MY_TOPIC",
     acl = ...,
-    cleanupPolicies = setOf(
-        CleanupPolicy.Compact(minCompactionLag = 24.hours, tombstoneRetention = 24.hours), // defaults
-        CleanupPolicy.Delete(retention = 30.days),
-    ),
+    compactionPolicy = CleanupPolicy.Compact(minCompactionLag = 24.hours, tombstoneRetention = 24.hours) // defaults
+    deletionPolicy = CleanupPolicy.Delete(retention = 30.days)
 )
 ```
-
-A topic can have at most one `Compact` and one `Delete` policy. All durations must be positive.
+All durations must be positive.
 
 Every `cleanup.interval` (default 10 minutes) the broker cleans each topic with a policy. The latest record on a topic is never deleted.
 

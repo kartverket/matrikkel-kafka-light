@@ -37,7 +37,7 @@ class CleanupConcurrencyTest : WithDatabase {
     private val topic = Topic(
         name = "concurrent-cleanup",
         acl = TopicAccessControlList(setOf("*"), setOf("*")),
-        cleanupPolicies = setOf(CleanupPolicy.Compact()),
+        compactionPolicy = CleanupPolicy.Compact(),
     )
     private val ctx = Records.Service.Ctx(topic, ServiceIdentity("fake-user"), Uuid.random())
     private val oldRows = 4000
