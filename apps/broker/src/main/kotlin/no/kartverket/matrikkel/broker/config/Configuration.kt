@@ -16,9 +16,9 @@ class DatabaseConfiguration(
     val adminCredential: Credential,
 )
 
-class CleanupConfiguration(
-    val interval: Duration = 10.minutes,
-    val batchSize: Int = 1000,
+class CleanupSchedulerConfiguration(
+    val interval: Duration,
+    val batchSize: Int,
 )
 
 class Configuration(
@@ -37,7 +37,10 @@ class Configuration(
         userCredential = Credential.from("DB_USER"),
         adminCredential = Credential.from("DB_ADMIN"),
     ),
-    val cleanup: CleanupConfiguration = CleanupConfiguration(),
+    val cleanup: CleanupSchedulerConfiguration = CleanupSchedulerConfiguration(
+        interval = 10.minutes,
+        batchSize = 1000,
+    ),
     val topicsCatalog: TopicCatalog = TopicCatalog(
         listOf(
             Topic(
