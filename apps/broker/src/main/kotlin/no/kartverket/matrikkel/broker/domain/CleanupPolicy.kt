@@ -4,7 +4,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 
 sealed interface CleanupPolicy {
-    /** Delete records older than [retention]. */
+    /** Delete records older than [retention] (kafka equivalent [retention.ms]).*/
     data class Delete(val retention: Duration) : CleanupPolicy {
         init {
             require(retention > Duration.ZERO) { "Delete retention must be positive" }
@@ -12,8 +12,8 @@ sealed interface CleanupPolicy {
     }
 
     /**
-     * Keep only the latest record per key. Records younger than [minCompactionLag] are never compacted.
-     * Tombstones are removed after [tombstoneRetention].
+     * Keep only the latest record per key. Records younger than [minCompactionLag] (kafka equivalent [min.compaction.lag.ms]) are never compacted.
+     * Tombstones are removed after [tombstoneRetention] (kafka equivalent [delete.retention.ms]).
      */
     data class Compact(
         val minCompactionLag: Duration = 24.hours,
