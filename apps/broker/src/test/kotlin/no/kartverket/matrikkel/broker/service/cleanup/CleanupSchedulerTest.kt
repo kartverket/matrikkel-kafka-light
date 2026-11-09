@@ -12,9 +12,11 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.milliseconds
 
 class CleanupSchedulerTest {
-    private fun topic(name: String,
-                      compactionPolicy: CleanupPolicy.Compact?=null,
-                      deletionPolicy : CleanupPolicy.Delete?=null) = Topic(
+private fun topic(
+  name: String,
+  compactionPolicy: CleanupPolicy.Compact? = null,
+  deletionPolicy : CleanupPolicy.Delete? = null
+) = Topic(
         name = name,
         acl = TopicAccessControlList(setOf("*"), setOf("*")),
         compactionPolicy = compactionPolicy,
