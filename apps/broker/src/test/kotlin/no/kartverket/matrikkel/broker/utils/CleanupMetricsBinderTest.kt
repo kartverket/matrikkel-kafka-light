@@ -15,9 +15,9 @@ import kotlin.time.Duration.Companion.days
 class CleanupMetricsBinderTest {
     private val acl = TopicAccessControlList(setOf("*"), setOf("*"))
     private val both = Topic(
-        "both", acl, cleanupPolicies = setOf(CleanupPolicy.Compact(), CleanupPolicy.Delete(30.days))
-    )
-    private val deleteOnly = Topic("delete-only", acl, cleanupPolicies = setOf(CleanupPolicy.Delete(30.days)))
+        "both", acl, compactionPolicy = CleanupPolicy.Compact(), deletionPolicy =  CleanupPolicy.Delete(30.days))
+
+    private val deleteOnly = Topic("delete-only", acl, deletionPolicy = CleanupPolicy.Delete(30.days))
     private val plain = Topic("plain", acl)
 
     private val registry = SimpleMeterRegistry()
