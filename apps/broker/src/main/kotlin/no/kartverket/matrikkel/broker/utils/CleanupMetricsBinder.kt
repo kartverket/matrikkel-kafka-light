@@ -22,10 +22,10 @@ class CleanupMetricsBinder(private val topics: Collection<Topic>) : MeterBinder 
 
     override fun bindTo(registry: MeterRegistry) {
         topics.forEach { topic ->
-            if (topic.cleanupPolicies.any { it is CleanupPolicy.Compact }) {
+            if (topic.compactionPolicy != null) {
                 counters[topic.name to Policy.COMPACT] = deletedCounter(registry, topic, Policy.COMPACT)
             }
-            if (topic.cleanupPolicies.any { it is CleanupPolicy.Delete }) {
+            if (topic.deletionPolicy != null) {
                 counters[topic.name to Policy.DELETE] = deletedCounter(registry, topic, Policy.DELETE)
             }
         }
