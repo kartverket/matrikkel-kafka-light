@@ -8,8 +8,8 @@ data class Topic(
     val acl: TopicAccessControlList,
     val leaseTime: Duration = 30.seconds,
     val tombstonesAllowed: Boolean = true,
-    val compactionPolicy: CleanupPolicy.Compact?=null,
-    val deletionPolicy: CleanupPolicy.Delete?=null,
+    val compactionPolicy: CleanupPolicy.Compact? = null,
+    val deletionPolicy: CleanupPolicy.Delete? = null,
 ) {
     init {
         require(TopicName.isValid(name)) { "Invalid topic name '$name'" }
