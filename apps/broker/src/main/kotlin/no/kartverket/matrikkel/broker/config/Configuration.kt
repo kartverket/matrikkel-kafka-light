@@ -92,7 +92,7 @@ fun brregTopics(): Array<Topic> {
             ),
         ),
         Topic(
-            name = "BRREG_HENDELSER",
+            name = "BRREG_HENDELSE",
             acl = TopicAccessControlList.internalTopicFor(brregSyncApp),
             leaseTime = 2.minutes,
             tombstonesAllowed = false,
