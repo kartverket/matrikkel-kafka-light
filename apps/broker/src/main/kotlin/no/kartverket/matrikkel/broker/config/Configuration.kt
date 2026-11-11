@@ -101,7 +101,7 @@ fun brregTopics(): Array<Topic> {
             ),
         ),
         Topic(
-            name = "BRREG_VIRKSOMHETER",
+            name = "BRREG_VIRKSOMHET",
             acl = TopicAccessControlList(
                 publishIdentities = setOf(brregSyncApp),
                 consumeIdentities = setOf(ingestorApp),
