@@ -54,7 +54,7 @@ fun runApplication(disableSecurity: Boolean = false) {
 
         install(Authentication) {
             if (disableSecurity) {
-                security.setupMock(config.matrikkelSergSyncIdentity)
+                security.setupMock("mock-subject")
             } else {
                 security.setupAuth()
             }

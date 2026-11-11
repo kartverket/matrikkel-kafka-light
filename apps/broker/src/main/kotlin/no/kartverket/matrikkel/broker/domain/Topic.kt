@@ -25,6 +25,8 @@ data class TopicAccessControlList(
 ) {
     companion object {
         const val WILDCARD = "*"
+
+        fun internalTopicFor(identity: String) = TopicAccessControlList(setOf(identity), setOf(identity))
     }
     fun canPublish(identity: ServiceIdentity): Boolean = publishIdentities.allows(identity)
     fun canConsume(identity: ServiceIdentity): Boolean = consumeIdentities.allows(identity)

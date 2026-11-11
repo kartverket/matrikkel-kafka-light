@@ -4,10 +4,12 @@ import io.ktor.http.HttpHeaders
 import no.kartverket.heimdall.common.kotlin.EnvUtils.getConfig
 import no.kartverket.heimdall.common.kotlin.EnvUtils.getConfigOrNull
 import no.kartverket.heimdall.common.ktor.plugins.security.Security
+import no.kartverket.matrikkel.broker.domain.CleanupPolicy
 import no.kartverket.matrikkel.broker.domain.Topic
 import no.kartverket.matrikkel.broker.domain.TopicAccessControlList
 import no.kartverket.matrikkel.broker.domain.TopicCatalog
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 
 class DatabaseConfiguration(
@@ -23,8 +25,6 @@ class CleanupSchedulerConfiguration(
 
 class Configuration(
     val version: String = getConfig("VERSION"),
-    val matrikkelEksternDataIngestorIdentity: String = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_EKSTERN_DATA_INGESTOR"),
-    val matrikkelSergSyncIdentity: String = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_SERG_SYNC"),
     val azuread: Security.AuthProvider = Security.AuthProvider(
         name = "azuread",
         jwksConfig = Security.JwksConfig.OidcWellkownUrl(
@@ -43,36 +43,77 @@ class Configuration(
     ),
     val topicsCatalog: TopicCatalog = TopicCatalog(
         listOf(
-            Topic(
-                name = "DEFAULT_TOPIC",
-                leaseTime = 5.minutes,
-                tombstonesAllowed = false,
-                acl = TopicAccessControlList(
-                    publishIdentities = setOf(TopicAccessControlList.WILDCARD),
-                    consumeIdentities = setOf(TopicAccessControlList.WILDCARD),
-                ),
-            ),
-            Topic(
-                name = "SERG_HENDELSER",
-                leaseTime = 5.minutes,
-                tombstonesAllowed = false,
-                acl = TopicAccessControlList(
-                    publishIdentities = setOf(matrikkelSergSyncIdentity),
-                    consumeIdentities = setOf(matrikkelSergSyncIdentity),
-                ),
-            ),
-            Topic(
-                name = "SERG_FORMUESOBJEKT_FAST_EIENDOM",
-                leaseTime = 5.minutes,
-                tombstonesAllowed = false,
-                acl = TopicAccessControlList(
-                    publishIdentities = setOf(matrikkelSergSyncIdentity),
-                    consumeIdentities = setOf(matrikkelEksternDataIngestorIdentity),
-                ),
-            ),
+            *sergTopics(),
+            *fregTopics(),
+            *brregTopics(),
         )
     )
 )
+
+fun sergTopics(): Array<Topic> {
+    val sergSyncApp: String = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_SERG_SYNC")
+    val ingestorApp: String = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_EKSTERN_DATA_INGESTOR")
+
+    return  arrayOf(
+        Topic(
+            name = "SERG_HENDELSER",
+            leaseTime = 5.minutes,
+            tombstonesAllowed = false,
+            acl = TopicAccessControlList.internalTopicFor(sergSyncApp),
+        ),
+        Topic(
+            name = "SERG_FORMUESOBJEKT_FAST_EIENDOM",
+            leaseTime = 5.minutes,
+            tombstonesAllowed = false,
+            acl = TopicAccessControlList(
+                publishIdentities = setOf(sergSyncApp),
+                consumeIdentities = setOf(ingestorApp),
+            ),
+        ),
+    )
+}
+
+fun fregTopics(): Array<Topic> {
+    return arrayOf()
+}
+
+fun brregTopics(): Array<Topic> {
+    val brregSyncApp = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_BRREG_SYNC")
+    val ingestorApp: String = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_EKSTERN_DATA_INGESTOR")
+
+    return arrayOf(
+        Topic(
+            name = "BRREG_OFFSET",
+            acl = TopicAccessControlList.internalTopicFor(brregSyncApp),
+            leaseTime = 2.minutes,
+            tombstonesAllowed = false,
+            compactionPolicy = CleanupPolicy.Compact(
+                minCompactionLag = 5.minutes
+            ),
+        ),
+        Topic(
+            name = "BRREG_HENDELSER",
+            acl = TopicAccessControlList.internalTopicFor(brregSyncApp),
+            leaseTime = 2.minutes,
+            tombstonesAllowed = false,
+            deletionPolicy = CleanupPolicy.Delete(
+                retention = 30.days
+            ),
+        ),
+        Topic(
+            name = "BRREG_VIRKSOMHETER",
+            acl = TopicAccessControlList(
+                publishIdentities = setOf(brregSyncApp),
+                consumeIdentities = setOf(ingestorApp),
+            ),
+            leaseTime = 2.minutes,
+            tombstonesAllowed = true,
+            compactionPolicy = CleanupPolicy.Compact(
+                minCompactionLag = 5.minutes,
+            ),
+        ),
+    )
+}
 
 class Credential(
     val username: String,
