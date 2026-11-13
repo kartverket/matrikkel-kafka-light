@@ -3,7 +3,7 @@ kotlin = "2.4.21"
 flywayVersion = "13.12.0"
 testcontainers = "1.21.4"
 junitVersion = "6.1.3"
-heimdallCommonVersion = "1.2026.10.21-08.43-89ca888"
+heimdallCommonVersion = "1.2026.11.05-10.47-05244ce"
 
 [libraries]
 slf4j = { module = "org.slf4j:slf4j-api", version = "2.0.20" }
