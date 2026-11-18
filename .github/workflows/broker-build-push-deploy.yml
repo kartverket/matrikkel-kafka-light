@@ -159,7 +159,7 @@ jobs:
             image=${{ needs.version.outputs.image }},version=${{ needs.version.outputs.version }}
 
   deploy-qa:
-    name: "Deploy Prodtest"
+    name: "Deploy Prodtest, Betatest og Kommunetest"
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     needs:
@@ -171,7 +171,7 @@ jobs:
       id-token: write
 
     steps:
-      - name: Deploy to prodtest
+      - name: Deploy to prodtest-betatest-kommunetest
         uses: kartverket/matrikkel-actions/heimdall-deploy@main
         with:
           cluster: 'atkv3-prod'
