@@ -175,7 +175,7 @@ jobs:
         uses: kartverket/matrikkel-actions/heimdall-deploy@main
         with:
           cluster: 'atkv3-prod'
-          resource: '.skip/prodtest.yaml'
+          resource: '.skip/prodtest.yaml, .skip/betatest.yaml, .skip/kommunetest.yaml'
           var: |
             image=${{ needs.version.outputs.image }},version=${{ needs.version.outputs.version }}
 
