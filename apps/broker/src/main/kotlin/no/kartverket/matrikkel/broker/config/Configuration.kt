@@ -117,7 +117,7 @@ fun brregTopics(): Array<Topic> {
 }
 
 fun brukeradminTopics(): Array<Topic> {
-    val brukeradminSyncApp = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_BRUKERADMIN_SYNC")
+    val brukeradminSyncApp = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_BRUKERADMIN")
     val ingestorApp: String = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_EKSTERN_DATA_INGESTOR")
 
     return arrayOf(
