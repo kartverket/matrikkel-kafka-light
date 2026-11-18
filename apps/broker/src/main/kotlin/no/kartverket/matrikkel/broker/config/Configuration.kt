@@ -117,14 +117,14 @@ fun brregTopics(): Array<Topic> {
 }
 
 fun brukeradminTopics(): Array<Topic> {
-    val brukeradminSyncApp = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_BRUKERADMIN")
+    val brukeradminApp = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_BRUKERADMIN")
     val ingestorApp: String = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_EKSTERN_DATA_INGESTOR")
 
     return arrayOf(
         Topic(
             name = "SYNKRONISERING_FRA_BRUKERADMIN_BRUKERDATA",
             acl = TopicAccessControlList(
-                publishIdentities = setOf(brukeradminSyncApp),
+                publishIdentities = setOf(brukeradminApp),
                 consumeIdentities = setOf(ingestorApp),
             ),
             leaseTime = 2.minutes,
