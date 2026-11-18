@@ -123,6 +123,9 @@ while (true) {
 }
 ```
 
+`commitSync()` commits the last sequence returned by the most recent `poll()`. If that poll returned no records
+(or was `423 Locked`), or the records have already been committed, `commitSync()` is a no-op.
+
 ```mermaid
 sequenceDiagram
     participant C as Consumer

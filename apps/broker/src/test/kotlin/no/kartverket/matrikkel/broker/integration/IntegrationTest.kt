@@ -75,6 +75,26 @@ class IntegrationTest : WithDatabase {
     }
 
     @Test
+    fun `restarted consumer with no new records can commit without error`() {
+        runIntegrationTest { producerFactory, consumerFactory ->
+            val producer = producerFactory("p1", "first-topic")
+            producer.sendSync(ProducerRecord(key = "record-1", value = "content-1"))
+            producer.sendSync(ProducerRecord(key = "record-2", value = "content-2"))
+            producer.close()
+
+            consumerFactory("c1", "first-topic").use { consumer ->
+                assertThat(consumer.poll().records).hasSize(2)
+                consumer.commitSync()
+            }
+
+            consumerFactory("c1", "first-topic").use { restartedConsumer ->
+                assertThat(restartedConsumer.poll().records).hasSize(0)
+                restartedConsumer.commitSync()
+            }
+        }
+    }
+
+    @Test
     fun `throughput test (10k records in two topics)`() {
         val messagesPerClient = 10_000
         val producerIds = listOf("p1" to "first-topic", "p2" to "second-topic")

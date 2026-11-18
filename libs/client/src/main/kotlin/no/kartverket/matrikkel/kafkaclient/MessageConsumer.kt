@@ -58,7 +58,9 @@ interface MessageConsumer<TKey, TValue> : Closeable {
         ),
     ) : MessageConsumer<TKey, TValue> {
         internal var leaseToken: String? = null
-        internal var lastDeliveredSequence: Long? = 0
+        // Sequence of the last record returned by the most recent successful poll, and not yet committed.
+        // Poll always reads from the committed offset, so anything delivered earlier is redelivered anyway.
+        internal var uncommittedSequence: Long? = null
 
         override suspend fun poll(
             maxRecords: Int?,
@@ -77,6 +79,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             } catch (e: KafkaClientException) {
                 when (e.status) {
                     HttpStatusCode.Locked -> {
+                        this.uncommittedSequence = null
                         delay(timeout ?: config.timeout)
                         return ConsumerRecords(topic = config.topic, records = emptyList())
                     }
@@ -97,14 +100,14 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             }
 
             this.leaseToken = responseBody.leaseToken
-            this.lastDeliveredSequence = records.lastOrNull()?.sequence ?: this.lastDeliveredSequence
+            this.uncommittedSequence = records.lastOrNull()?.sequence
 
             return ConsumerRecords(topic = config.topic, records = records)
 
         }
 
         override suspend fun commitSync() {
-            val sequence = this.lastDeliveredSequence ?: return
+            val sequence = this.uncommittedSequence ?: return
             val token = this.leaseToken ?: return
 
             val response = try {
@@ -124,6 +127,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
 
             val responseBody = response.body<CommitResponse>()
             this.leaseToken = responseBody.leaseToken
+            this.uncommittedSequence = null
         }
 
         override suspend fun seek(sequence: Long) {
@@ -142,7 +146,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                 }
             }
 
-            this.lastDeliveredSequence = sequence
+            this.uncommittedSequence = null
         }
 
         override suspend fun heartbeat() {

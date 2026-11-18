@@ -263,7 +263,73 @@ class MessageConsumerTest {
         val consumer = MessageConsumer.Impl(config = clientConfig)
 
         consumer.poll()
-        assertThat(consumer.lastDeliveredSequence).isEqualTo(1)
+        assertThat(consumer.uncommittedSequence).isEqualTo(1)
+    }
+
+    @Test
+    fun `commit is skipped when poll returned no records`(): Unit = runBlocking {
+        server.enqueueCborResponse(pollResponse.copy(records = emptyList()))
+        server.start()
+
+        val consumer = MessageConsumer.Impl(config = clientConfig)
+
+        consumer.poll()
+        consumer.commitSync()
+        consumer.close()
+
+        assertThat(consumer.uncommittedSequence).isNull()
+        assertThat(server.requestCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `empty poll after a previous poll with records does not commit stale sequence`(): Unit = runBlocking {
+        server.enqueueCborResponse(pollResponse)
+        server.enqueueCborResponse(pollResponse.copy(records = emptyList()))
+        server.start()
+
+        val consumer = MessageConsumer.Impl(config = clientConfig)
+
+        consumer.poll()
+        consumer.poll()
+        consumer.commitSync()
+        consumer.close()
+
+        assertThat(consumer.uncommittedSequence).isNull()
+        assertThat(server.requestCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `commit is skipped when poll was locked`() = runTest {
+        server.enqueueCborResponse(pollResponse)
+        server.enqueueCborResponse(ErrorResponse("locked", "Could not acquire lease"), code = HttpStatusCode.Locked.value)
+        server.start()
+
+        val consumer = MessageConsumer.Impl(config = clientConfig)
+
+        consumer.poll()
+        consumer.poll()
+        consumer.commitSync()
+        consumer.close()
+
+        assertThat(consumer.uncommittedSequence).isNull()
+        assertThat(server.requestCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `commit is only sent once per poll`(): Unit = runBlocking {
+        server.enqueueCborResponse(pollResponse)
+        server.enqueueCborResponse(CommitResponse("updated-lease-token"))
+        server.start()
+
+        val consumer = MessageConsumer.Impl(config = clientConfig)
+
+        consumer.poll()
+        consumer.commitSync()
+        consumer.commitSync()
+        consumer.close()
+
+        assertThat(consumer.uncommittedSequence).isNull()
+        assertThat(server.requestCount).isEqualTo(2)
     }
 
     @Test
@@ -287,14 +353,17 @@ class MessageConsumerTest {
     }
 
     @Test
-    fun `seek updates last delivered`(): Unit = runBlocking {
+    fun `seek clears uncommitted sequence`(): Unit = runBlocking {
+        server.enqueueCborResponse(pollResponse)
         server.enqueueCborResponse(SeekResponse())
         server.start()
 
         val consumer = MessageConsumer.Impl(config = clientConfig)
+        consumer.poll()
         consumer.seek(13L)
 
-        assertThat(consumer.lastDeliveredSequence).isEqualTo(13)
+        assertThat(consumer.uncommittedSequence).isNull()
+        server.takeRequest()
         val seekRequest = server.takeRequest()
         val body = seekRequest.responseBody<SeekRequest>()
 
