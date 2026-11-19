@@ -46,6 +46,7 @@ class Configuration(
             *sergTopics(),
             *fregTopics(),
             *brregTopics(),
+            *brukeradminTopics(),
         )
     )
 )
@@ -104,6 +105,26 @@ fun brregTopics(): Array<Topic> {
             name = "BRREG_VIRKSOMHET",
             acl = TopicAccessControlList(
                 publishIdentities = setOf(brregSyncApp),
+                consumeIdentities = setOf(ingestorApp),
+            ),
+            leaseTime = 2.minutes,
+            tombstonesAllowed = true,
+            compactionPolicy = CleanupPolicy.Compact(
+                minCompactionLag = 5.minutes,
+            ),
+        ),
+    )
+}
+
+fun brukeradminTopics(): Array<Topic> {
+    val brukeradminApp = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_BRUKERADMIN")
+    val ingestorApp: String = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_EKSTERN_DATA_INGESTOR")
+
+    return arrayOf(
+        Topic(
+            name = "SYNKRONISERING_FRA_BRUKERADMIN_BRUKERDATA",
+            acl = TopicAccessControlList(
+                publishIdentities = setOf(brukeradminApp),
                 consumeIdentities = setOf(ingestorApp),
             ),
             leaseTime = 2.minutes,
