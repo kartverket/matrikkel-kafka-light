@@ -11,10 +11,17 @@ updates:
     directory: ".github/workflows"
     schedule:
       interval: "weekly"
+    cooldown:
+      exclude: # ikke cooldown for interne pakker
+        - "kartverket/*"
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
       interval: "daily"
+    cooldown:
+      exclude: # ikke cooldown for interne pakker
+        - "no.kartverket.*:*"
+        - "no.statkart.*:*"
   - package-ecosystem: "docker"
     directory: "/apps/broker"
     registries:
