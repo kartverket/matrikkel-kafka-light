@@ -123,8 +123,8 @@ while (true) {
 }
 ```
 
-`commitSync()` commits the last sequence returned by the most recent `poll()`. If that poll returned no records
-(or was `423 Locked`), or the records have already been committed, `commitSync()` is a no-op.
+`commitSync()` commits the sequence of the last delivered record that has not yet been committed.
+If no records have been delivered since the last commit (or since the consumer was created), `commitSync()` is a no-op.
 
 ```mermaid
 sequenceDiagram

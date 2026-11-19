@@ -58,8 +58,8 @@ interface MessageConsumer<TKey, TValue> : Closeable {
         ),
     ) : MessageConsumer<TKey, TValue> {
         internal var leaseToken: String? = null
-        // Sequence of the last record returned by the most recent successful poll, and not yet committed.
-        // Poll always reads from the committed offset, so anything delivered earlier is redelivered anyway.
+        // Sequence of the last delivered record that has not yet been committed.
+        // Starts as null so a new consumer never commits a sequence it has not received.
         internal var uncommittedSequence: Long? = null
 
         override suspend fun poll(
@@ -79,7 +79,6 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             } catch (e: KafkaClientException) {
                 when (e.status) {
                     HttpStatusCode.Locked -> {
-                        this.uncommittedSequence = null
                         delay(timeout ?: config.timeout)
                         return ConsumerRecords(topic = config.topic, records = emptyList())
                     }
@@ -100,7 +99,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             }
 
             this.leaseToken = responseBody.leaseToken
-            this.uncommittedSequence = records.lastOrNull()?.sequence
+            this.uncommittedSequence = records.lastOrNull()?.sequence ?: this.uncommittedSequence
 
             return ConsumerRecords(topic = config.topic, records = records)
 

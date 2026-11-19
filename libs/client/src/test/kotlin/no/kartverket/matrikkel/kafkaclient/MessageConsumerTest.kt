@@ -282,9 +282,10 @@ class MessageConsumerTest {
     }
 
     @Test
-    fun `empty poll after a previous poll with records does not commit stale sequence`(): Unit = runBlocking {
+    fun `empty poll keeps sequence from previous poll for commit`(): Unit = runBlocking {
         server.enqueueCborResponse(pollResponse)
         server.enqueueCborResponse(pollResponse.copy(records = emptyList()))
+        server.enqueueCborResponse(CommitResponse("updated-lease-token"))
         server.start()
 
         val consumer = MessageConsumer.Impl(config = clientConfig)
@@ -294,14 +295,16 @@ class MessageConsumerTest {
         consumer.commitSync()
         consumer.close()
 
-        assertThat(consumer.uncommittedSequence).isNull()
-        assertThat(server.requestCount).isEqualTo(2)
+        val commitRequest = server.takeRequests(3).last()
+        assertThat(commitRequest.path).isEqualTo("/topics/test-topic/commit")
+        assertThat(commitRequest.responseBody<CommitRequest>().sequence).isEqualTo(1L)
     }
 
     @Test
-    fun `commit is skipped when poll was locked`() = runTest {
+    fun `locked poll keeps sequence from previous poll for commit`() = runTest {
         server.enqueueCborResponse(pollResponse)
         server.enqueueCborResponse(ErrorResponse("locked", "Could not acquire lease"), code = HttpStatusCode.Locked.value)
+        server.enqueueCborResponse(CommitResponse("updated-lease-token"))
         server.start()
 
         val consumer = MessageConsumer.Impl(config = clientConfig)
@@ -311,8 +314,9 @@ class MessageConsumerTest {
         consumer.commitSync()
         consumer.close()
 
-        assertThat(consumer.uncommittedSequence).isNull()
-        assertThat(server.requestCount).isEqualTo(2)
+        val commitRequest = server.takeRequests(3).last()
+        assertThat(commitRequest.path).isEqualTo("/topics/test-topic/commit")
+        assertThat(commitRequest.responseBody<CommitRequest>().sequence).isEqualTo(1L)
     }
 
     @Test
