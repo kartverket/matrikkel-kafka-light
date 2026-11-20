@@ -58,7 +58,9 @@ interface MessageConsumer<TKey, TValue> : Closeable {
         ),
     ) : MessageConsumer<TKey, TValue> {
         internal var leaseToken: String? = null
-        internal var lastDeliveredSequence: Long? = 0
+        // Sequence of the last delivered record that has not yet been committed.
+        // Starts as null so a new consumer never commits a sequence it has not received.
+        internal var uncommittedSequence: Long? = null
 
         override suspend fun poll(
             maxRecords: Int?,
@@ -97,14 +99,14 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             }
 
             this.leaseToken = responseBody.leaseToken
-            this.lastDeliveredSequence = records.lastOrNull()?.sequence ?: this.lastDeliveredSequence
+            this.uncommittedSequence = records.lastOrNull()?.sequence ?: this.uncommittedSequence
 
             return ConsumerRecords(topic = config.topic, records = records)
 
         }
 
         override suspend fun commitSync() {
-            val sequence = this.lastDeliveredSequence ?: return
+            val sequence = this.uncommittedSequence ?: return
             val token = this.leaseToken ?: return
 
             val response = try {
@@ -124,6 +126,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
 
             val responseBody = response.body<CommitResponse>()
             this.leaseToken = responseBody.leaseToken
+            this.uncommittedSequence = null
         }
 
         override suspend fun seek(sequence: Long) {
@@ -142,7 +145,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                 }
             }
 
-            this.lastDeliveredSequence = sequence
+            this.uncommittedSequence = null
         }
 
         override suspend fun heartbeat() {
