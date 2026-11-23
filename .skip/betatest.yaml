@@ -39,6 +39,7 @@ spec:
   accessPolicy:
     inbound:
       rules:
+        - application: matrikkel-ekstern-data-ingestor
         - application: matrikkel-brukeradmin
           namespace: mat-brukeradmin-prod
 
