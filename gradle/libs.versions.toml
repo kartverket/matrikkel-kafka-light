@@ -1,13 +1,13 @@
 [versions]
 kotlin = "2.4.21"
-flywayVersion = "13.12.2"
+flywayVersion = "13.13.0"
 testcontainers = "1.21.4"
 junitVersion = "6.1.3"
 heimdallCommonVersion = "1.2026.11.17-14.08-2959010"
 
 [libraries]
 slf4j = { module = "org.slf4j:slf4j-api", version = "2.0.20" }
-logback-classic = { module = "ch.qos.logback:logback-classic", version = "1.6.7" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version = "1.6.8" }
 logstash = { module = "net.logstash.logback:logstash-logback-encoder", version = "9.0" }
 kotlinCoroutinesTest = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version = "1.11.0" }
 kotlinGradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -21,7 +21,7 @@ hikari = { module = "com.zaxxer:HikariCP", version = "7.1.0" }
 postgresql = { module = "org.postgresql:postgresql", version = "42.7.14" }
 h2 = { module = "com.h2database:h2", version = "2.5.252"}
 kotliquery = { module = "com.github.seratch:kotliquery", version = "1.9.1" }
-micrometerPrometheus = { module = "io.micrometer:micrometer-registry-prometheus", version = "1.17.2" }
+micrometerPrometheus = { module = "io.micrometer:micrometer-registry-prometheus", version = "1.18.0" }
 
 junitApi = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junitVersion" }
 junitEngine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junitVersion" }
