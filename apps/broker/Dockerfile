@@ -1,4 +1,4 @@
-FROM dhi.io/eclipse-temurin:25.0.5.8-alpine3.24@sha256:f3263435e20c3521197b318a3cd06f7fd6be2380d454e52c964576b1b38047c3 AS runtime
+FROM dhi.io/eclipse-temurin:25.0.5.8.1.2-alpine3.24@sha256:f7e4086e2217b2804f273843311aceb8ff8a4a8e774e363171c7ae727d03fb29 AS runtime
 
 COPY apps/broker/build/install/broker /app
 
