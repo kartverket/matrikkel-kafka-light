@@ -42,6 +42,7 @@ spec:
         - application: matrikkel-ekstern-data-ingestor
         - application: matrikkel-serg-sync
         - application: matrikkel-brreg-sync
+        - application: matrikkel-brreg-datalast-job
         - application: matrikkel-brukeradmin
           namespace: mat-brukeradmin-prod
 
