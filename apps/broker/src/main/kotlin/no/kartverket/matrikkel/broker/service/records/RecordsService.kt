@@ -139,7 +139,7 @@ object Records {
             }
 
             if (validLease) {
-                throw ServiceException.badRequest(
+                throw ServiceException.locked(
                     code = "active_lease",
                     message = "A current lease prevents seeking for this consumer group"
                 )
