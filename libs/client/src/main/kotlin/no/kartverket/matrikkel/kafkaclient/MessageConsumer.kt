@@ -34,7 +34,9 @@ interface MessageConsumer<TKey, TValue> : Closeable {
     suspend fun commitSync()
     suspend fun commitSyncOrThrow()
     suspend fun seek(sequence: Long)
+    suspend fun seekOrThrow(sequence: Long)
     suspend fun heartbeat()
+    suspend fun heartbeatOrThrow()
     suspend fun metadata(): MetadataResponse
 
     class LockedTopicException(message: String) : RuntimeException(message)
@@ -152,6 +154,15 @@ interface MessageConsumer<TKey, TValue> : Closeable {
 
         override suspend fun seek(sequence: Long) {
             try {
+                seekOrThrow(sequence)
+            } catch (_: LockedTopicException) {
+                return
+            }
+        }
+
+        @Throws(LockedTopicException::class)
+        override suspend fun seekOrThrow(sequence: Long) {
+            try {
                 client.postCBOR(
                     operation = "seek",
                     body = SeekRequest(
@@ -161,7 +172,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                 )
             } catch (e: KafkaClientException) {
                 when (e.status) {
-                    HttpStatusCode.Locked -> return
+                    HttpStatusCode.Locked -> throw LockedTopicException("Could not seek. Topic is locked by another consumer")
                     else -> throw e
                 }
             }
@@ -170,12 +181,28 @@ interface MessageConsumer<TKey, TValue> : Closeable {
         }
 
         override suspend fun heartbeat() {
+            try {
+                heartbeatOrThrow()
+            } catch (_: LockedTopicException) {
+                return
+            }
+        }
+
+        @Throws(LockedTopicException::class)
+        override suspend fun heartbeatOrThrow() {
             val token = this.leaseToken ?: return
 
-            val response = client.postCBOR(
-                operation = "heartbeat",
-                body = HeartbeatRequest(leaseToken = token)
-            )
+            val response = try {
+                client.postCBOR(
+                    operation = "heartbeat",
+                    body = HeartbeatRequest(leaseToken = token)
+                )
+            } catch (e: KafkaClientException) {
+                when (e.status) {
+                    HttpStatusCode.Locked -> throw LockedTopicException("Could not complete heartbeat. Topic is locked by another consumer")
+                    else -> throw e
+                }
+            }
             val heartbeat = response.body<HeartbeatResponse>()
 
             this.leaseToken = heartbeat.leaseToken
