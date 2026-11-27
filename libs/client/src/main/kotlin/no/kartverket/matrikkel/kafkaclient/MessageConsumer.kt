@@ -30,10 +30,16 @@ data class ConsumerRecord<TKey, TValue>(
 
 interface MessageConsumer<TKey, TValue> : Closeable {
     suspend fun poll(maxRecords: Int? = null, timeout: Duration? = null): ConsumerRecords<TKey, TValue>
+    suspend fun pollOrThrow(maxRecords: Int? = null, timeout: Duration? = null): ConsumerRecords<TKey, TValue>
     suspend fun commitSync()
+    suspend fun commitSyncOrThrow()
     suspend fun seek(sequence: Long)
+    suspend fun seekOrThrow(sequence: Long)
     suspend fun heartbeat()
+    suspend fun heartbeatOrThrow()
     suspend fun metadata(): MetadataResponse
+
+    class LockedTopicException(message: String) : RuntimeException(message)
 
     data class Config<TKey, TValue>(
         val server: Url,
@@ -64,6 +70,19 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             maxRecords: Int?,
             timeout: Duration?,
         ): ConsumerRecords<TKey, TValue> {
+            return try {
+                pollOrThrow(maxRecords, timeout)
+            } catch (_: LockedTopicException) {
+                delay(timeout ?: config.timeout)
+                return ConsumerRecords(topic = config.topic, records = emptyList())
+            }
+        }
+
+        @Throws(LockedTopicException::class)
+        override suspend fun pollOrThrow(
+            maxRecords: Int?,
+            timeout: Duration?,
+        ): ConsumerRecords<TKey, TValue> {
             val response = try {
                 client.postCBOR(
                     operation = "poll",
@@ -77,8 +96,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             } catch (e: KafkaClientException) {
                 when (e.status) {
                     HttpStatusCode.Locked -> {
-                        delay(timeout ?: config.timeout)
-                        return ConsumerRecords(topic = config.topic, records = emptyList())
+                        throw LockedTopicException("Could not poll. Topic is locked by another consumer")
                     }
 
                     else -> throw e
@@ -100,10 +118,18 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             this.lastDeliveredSequence = records.lastOrNull()?.sequence ?: this.lastDeliveredSequence
 
             return ConsumerRecords(topic = config.topic, records = records)
-
         }
 
         override suspend fun commitSync() {
+            return try {
+                commitSyncOrThrow()
+            } catch (_: LockedTopicException) {
+                return
+            }
+        }
+
+        @Throws(LockedTopicException::class)
+        override suspend fun commitSyncOrThrow() {
             val sequence = this.lastDeliveredSequence ?: return
             val token = this.leaseToken ?: return
 
@@ -117,7 +143,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                 )
             } catch (e: KafkaClientException) {
                 when (e.status) {
-                    HttpStatusCode.Locked -> return
+                    HttpStatusCode.Locked -> throw LockedTopicException("Could not commit. Topic is locked by another consumer")
                     else -> throw e
                 }
             }
@@ -128,6 +154,15 @@ interface MessageConsumer<TKey, TValue> : Closeable {
 
         override suspend fun seek(sequence: Long) {
             try {
+                seekOrThrow(sequence)
+            } catch (_: LockedTopicException) {
+                return
+            }
+        }
+
+        @Throws(LockedTopicException::class)
+        override suspend fun seekOrThrow(sequence: Long) {
+            try {
                 client.postCBOR(
                     operation = "seek",
                     body = SeekRequest(
@@ -137,7 +172,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
                 )
             } catch (e: KafkaClientException) {
                 when (e.status) {
-                    HttpStatusCode.Locked -> return
+                    HttpStatusCode.Locked -> throw LockedTopicException("Could not seek. Topic is locked by another consumer")
                     else -> throw e
                 }
             }
@@ -146,12 +181,28 @@ interface MessageConsumer<TKey, TValue> : Closeable {
         }
 
         override suspend fun heartbeat() {
+            try {
+                heartbeatOrThrow()
+            } catch (_: LockedTopicException) {
+                return
+            }
+        }
+
+        @Throws(LockedTopicException::class)
+        override suspend fun heartbeatOrThrow() {
             val token = this.leaseToken ?: return
 
-            val response = client.postCBOR(
-                operation = "heartbeat",
-                body = HeartbeatRequest(leaseToken = token)
-            )
+            val response = try {
+                client.postCBOR(
+                    operation = "heartbeat",
+                    body = HeartbeatRequest(leaseToken = token)
+                )
+            } catch (e: KafkaClientException) {
+                when (e.status) {
+                    HttpStatusCode.Locked -> throw LockedTopicException("Could not complete heartbeat. Topic is locked by another consumer")
+                    else -> throw e
+                }
+            }
             val heartbeat = response.body<HeartbeatResponse>()
 
             this.leaseToken = heartbeat.leaseToken
