@@ -29,7 +29,7 @@ data class ConsumerRecord<TKey, TValue>(
 )
 
 interface MessageConsumer<TKey, TValue> : Closeable {
-    suspend fun poll(maxRecords: Int? = null, timeout: Duration? = null): ConsumerRecords<TKey, TValue>
+    suspend fun poll(maxRecords: Int? = null, timeout: Duration? = null, silentFailLocked: Boolean = true): ConsumerRecords<TKey, TValue>
     suspend fun commitSync()
     suspend fun seek(sequence: Long)
     suspend fun heartbeat()
@@ -63,6 +63,7 @@ interface MessageConsumer<TKey, TValue> : Closeable {
         override suspend fun poll(
             maxRecords: Int?,
             timeout: Duration?,
+            silentFailLocked: Boolean
         ): ConsumerRecords<TKey, TValue> {
             val response = try {
                 client.postCBOR(
@@ -77,8 +78,12 @@ interface MessageConsumer<TKey, TValue> : Closeable {
             } catch (e: KafkaClientException) {
                 when (e.status) {
                     HttpStatusCode.Locked -> {
-                        delay(timeout ?: config.timeout)
-                        return ConsumerRecords(topic = config.topic, records = emptyList())
+                        if (silentFailLocked) {
+                            delay(timeout ?: config.timeout)
+                            return ConsumerRecords(topic = config.topic, records = emptyList())
+                        } else {
+                            throw e
+                        }
                     }
 
                     else -> throw e
