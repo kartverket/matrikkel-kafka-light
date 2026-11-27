@@ -79,13 +79,14 @@ fun fregTopics(): Array<Topic> {
 }
 
 fun brregTopics(): Array<Topic> {
-    val brregSyncApp = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_BRREG_SYNC")
+    val syncApp = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_BRREG_SYNC")
+    val datalastJob = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_BRREG_DATALAST_JOB")
     val ingestorApp: String = getConfig("AZURE_AD_SERVICE_PRINCIPAL_MATRIKKEL_EKSTERN_DATA_INGESTOR")
 
     return arrayOf(
         Topic(
             name = "BRREG_OFFSET",
-            acl = TopicAccessControlList.internalTopicFor(brregSyncApp),
+            acl = TopicAccessControlList.internalTopicFor(syncApp),
             leaseTime = 2.minutes,
             tombstonesAllowed = false,
             compactionPolicy = CleanupPolicy.Compact(
@@ -94,7 +95,7 @@ fun brregTopics(): Array<Topic> {
         ),
         Topic(
             name = "BRREG_HENDELSE",
-            acl = TopicAccessControlList.internalTopicFor(brregSyncApp),
+            acl = TopicAccessControlList.internalTopicFor(syncApp),
             leaseTime = 2.minutes,
             tombstonesAllowed = false,
             deletionPolicy = CleanupPolicy.Delete(
@@ -104,7 +105,7 @@ fun brregTopics(): Array<Topic> {
         Topic(
             name = "BRREG_VIRKSOMHET",
             acl = TopicAccessControlList(
-                publishIdentities = setOf(brregSyncApp),
+                publishIdentities = setOf(datalastJob, syncApp),
                 consumeIdentities = setOf(ingestorApp),
             ),
             leaseTime = 2.minutes,
