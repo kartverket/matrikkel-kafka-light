@@ -123,6 +123,9 @@ while (true) {
 }
 ```
 
+`commitSync()` commits the sequence of the last delivered record that has not yet been committed.
+If no records have been delivered since the last commit (or since the consumer was created), `commitSync()` is a no-op.
+
 ```mermaid
 sequenceDiagram
     participant C as Consumer
